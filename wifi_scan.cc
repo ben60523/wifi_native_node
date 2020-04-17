@@ -100,6 +100,15 @@ napi_value Scan(napi_env env, napi_callback_info info)
       }
     }
     assert(status == napi_ok);
+    if (pIfList != NULL)
+    {
+      WlanFreeMemory(pIfList);
+      pIfList = NULL;
+    }
+    if (hClient != NULL)
+    {
+      WlanCloseHandle(hClient, NULL);
+    }
     return scan_result_arr;
   }
 }
