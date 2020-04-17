@@ -1,5 +1,7 @@
-var wifi_scan = require('bindings')('wifi_scan');
+var wifi_scan = require("./index");
 
-console.log(wifi_scan.hello()); // 'world'
-
-console.log(wifi_scan.wifiscan());
+wifi_scan().then((results) => {
+    console.log("MediCamNetworks: ", results);
+}).catch((results) => {
+    console.log("scan failed");
+})

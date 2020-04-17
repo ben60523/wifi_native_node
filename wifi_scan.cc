@@ -104,13 +104,29 @@ napi_value Scan(napi_env env, napi_callback_info info)
   }
 }
 
-napi_value Method(napi_env env, napi_callback_info info)
+napi_value getScanCB(napi_env env, napi_callback_info info)
 {
+  size_t argc = 1;
   napi_status status;
-  napi_value world;
-  status = napi_create_string_utf8(env, "world", 5, &world);
+  napi_value args[1];
+  status = napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
   assert(status == napi_ok);
-  return world;
+
+  napi_value cb = args[0];
+
+  napi_value argv[1];
+  argv[0] = Scan(env, info);
+  assert(status == napi_ok);
+
+  napi_value global;
+  status = napi_get_global(env, &global);
+  assert(status == napi_ok);
+
+  napi_value result;
+  status = napi_call_function(env, global, cb, 1, argv, &result);
+  assert(status == napi_ok);
+
+  return nullptr;
 }
 
 #define DECLARE_NAPI_METHOD(name, func)     \
@@ -121,10 +137,8 @@ napi_value Method(napi_env env, napi_callback_info info)
 napi_value Init(napi_env env, napi_value exports)
 {
   napi_status status;
-  napi_property_descriptor desc = DECLARE_NAPI_METHOD("hello", Method);
-  napi_property_descriptor Scandesc = DECLARE_NAPI_METHOD("wifiscan", Scan);
+  napi_property_descriptor desc = DECLARE_NAPI_METHOD("wifiscanCb", getScanCB);
   status = napi_define_properties(env, exports, 1, &desc);
-  status = napi_define_properties(env, exports, 1, &Scandesc);
   assert(status == napi_ok);
   return exports;
 }

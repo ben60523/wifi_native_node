@@ -2,7 +2,7 @@
   "name": "wifi_scan_node_addon",
   "version": "0.0.0",
   "description": "wifi scan with wlanapi",
-  "main": "wifi_scan_test.js",
+  "main": "index.js",
   "private": true,
   "dependencies": {
     "bindings": "~1.2.1",
