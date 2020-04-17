@@ -12,7 +12,7 @@
     "node-gyp": "^6.1.0"
   },
   "scripts": {
-    "test": "node wifi_scan_test.js"
+    "test": "node example/wifi_scan.js"
   },
   "gypfile": true
 }

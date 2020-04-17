@@ -1,4 +1,4 @@
-var wifi_scan = require("./index");
+var wifi_scan = require("../index");
 
 wifi_scan().then((results) => {
     console.log("MediCamNetworks: ", results);
