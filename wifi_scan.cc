@@ -13,35 +13,72 @@
 #pragma comment(lib, "wlanapi.lib")
 #pragma comment(lib, "ole32.lib")
 
-struct ScanResult
+typedef struct _WLAN_CALLBACK_INFO
 {
-  UCHAR *ssid;
-  long iRssi;
-};
+  GUID interfaceGUID;
+  HANDLE handleEvent;
+  DWORD callbackReason;
+} WLAN_CALLBACK_INFO;
 
-napi_value Scan(napi_env env, napi_callback_info info)
+HANDLE hClient = NULL;
+WLAN_CALLBACK_INFO callbackInfo = {0};
+PWLAN_BSS_LIST WlanBssList;
+PWLAN_INTERFACE_INFO pIfInfo = NULL;
+PWLAN_INTERFACE_INFO_LIST pIfList = NULL;
+PDOT11_SSID pDotSSid = NULL;
+
+void wlanCallback(WLAN_NOTIFICATION_DATA *scanNotificationData, PVOID myContext)
+{
+  WLAN_CALLBACK_INFO *callbackInfo = (WLAN_CALLBACK_INFO *)myContext;
+  if (callbackInfo == nullptr)
+  {
+    return;
+  }
+  if (memcmp(&callbackInfo->interfaceGUID, &scanNotificationData->InterfaceGuid, sizeof(GUID)) != 0)
+  {
+    return;
+  }
+  if ((scanNotificationData->NotificationCode == wlan_notification_acm_scan_complete) || (scanNotificationData->NotificationCode == wlan_notification_acm_scan_fail))
+  {
+    callbackInfo->callbackReason = scanNotificationData->NotificationCode;
+    SetEvent(callbackInfo->handleEvent);
+  }
+  return;
+}
+
+napi_value WlanInit(napi_env env, napi_callback_info info)
 {
   napi_status status;
-  napi_value scan_result_arr = NULL;
-  status = napi_create_array(env, &scan_result_arr);
+  DWORD dwResult = 0;
   DWORD dwMaxClient = 2;
   DWORD dwCurVersion = 0;
-  DWORD dwResult = 0;
-  DWORD dwRetVal = 0;
-  GUID interfaceGuid;
-  DWORD dwPrevNotifType = 0;
-  PWLAN_BSS_LIST WlanBssList;
-  HANDLE hClient = NULL;
-  PWLAN_INTERFACE_INFO pIfInfo = NULL;
-  PWLAN_INTERFACE_INFO_LIST pIfList = NULL;
-  PDOT11_SSID pDotSSid = NULL;
-  unsigned int ifaceNum = 0;
-
   dwResult = WlanOpenHandle(dwMaxClient, NULL, &dwCurVersion, &hClient);
   if (dwResult != ERROR_SUCCESS)
   {
     wprintf(L"WlanOpenHandle failed with error: %u\n", dwResult);
   }
+  dwResult = WlanRegisterNotification(hClient, WLAN_NOTIFICATION_SOURCE_ALL, TRUE, (WLAN_NOTIFICATION_CALLBACK)wlanCallback, (PVOID)&callbackInfo, NULL, NULL);
+  if (dwResult != ERROR_SUCCESS)
+  {
+    wprintf(L"WlanRegisterNotification failed with error: %u\n", dwResult);
+  }
+  return nullptr;
+}
+
+napi_value Scan(napi_env env, napi_callback_info info)
+{
+  if (hClient == NULL) {
+    return nullptr;
+  }
+  napi_status status;
+  napi_value scan_result_arr = NULL;
+  status = napi_create_array(env, &scan_result_arr);
+  DWORD dwResult = 0;
+  DWORD dwRetVal = 0;
+  GUID interfaceGuid;
+  DWORD dwPrevNotifType = 0;
+
+  unsigned int ifaceNum = 0;
   dwResult = WlanEnumInterfaces(hClient, NULL, &pIfList);
   if (dwResult != ERROR_SUCCESS)
   {
@@ -56,61 +93,85 @@ napi_value Scan(napi_env env, napi_callback_info info)
       pIfInfo = (WLAN_INTERFACE_INFO *)&pIfList->InterfaceInfo[ifaceNum];
       PWLAN_RAW_DATA WlanRawData = NULL;
       wprintf(L"%ls Scanning...\n", pIfInfo->strInterfaceDescription);
+      callbackInfo.interfaceGUID = pIfInfo->InterfaceGuid;
+      callbackInfo.handleEvent = CreateEvent(
+          nullptr,
+          FALSE,
+          FALSE,
+          nullptr);
       dwResult = WlanScan(hClient, &pIfInfo->InterfaceGuid, pDotSSid, WlanRawData, NULL);
       if (dwResult != ERROR_SUCCESS)
       {
         wprintf(L"WlanScan failed with error: %u\n", dwResult);
       }
     }
-    Sleep(4000);
-    for (ifaceNum = 0; ifaceNum < (int)pIfList->dwNumberOfItems; ifaceNum++)
+    DWORD waitResult = WaitForSingleObject(callbackInfo.handleEvent, 15000);
+    if (waitResult == WAIT_OBJECT_0)
     {
-      pIfInfo = (WLAN_INTERFACE_INFO *)&pIfList->InterfaceInfo[ifaceNum];
-      PWLAN_BSS_LIST WlanBssList;
-      if (WlanGetNetworkBssList(hClient, &pIfInfo->InterfaceGuid, pDotSSid, dot11_BSS_type_independent, FALSE, NULL, &WlanBssList) == ERROR_SUCCESS)
+      if (callbackInfo.callbackReason == wlan_notification_acm_scan_complete)
       {
-        WCHAR GuidString[40] = {0};
-        uint32_t correct_counter = 0;
-        StringFromGUID2(pIfInfo->InterfaceGuid, (LPOLESTR)&GuidString, 39);
-        wprintf(L"===========%ws=============\n", GuidString);
-        for (int c = 0; c < WlanBssList->dwNumberOfItems; c++)
+        for (ifaceNum = 0; ifaceNum < (int)pIfList->dwNumberOfItems; ifaceNum++)
         {
-          wprintf(L"SSID: %hs\n", WlanBssList->wlanBssEntries[c].dot11Ssid.ucSSID);
-          wprintf(L"MAC: %02x:%02x:%02x:%02x:%02x:%02x\n",
-                  WlanBssList->wlanBssEntries[c].dot11Bssid[0],
-                  WlanBssList->wlanBssEntries[c].dot11Bssid[1],
-                  WlanBssList->wlanBssEntries[c].dot11Bssid[2],
-                  WlanBssList->wlanBssEntries[c].dot11Bssid[3],
-                  WlanBssList->wlanBssEntries[c].dot11Bssid[4],
-                  WlanBssList->wlanBssEntries[c].dot11Bssid[5]);
-          wprintf(L"RSSI: %ld\n", WlanBssList->wlanBssEntries[c].lRssi);
-          wprintf(L"---------------------------\n");
-          if (strstr((char *)WlanBssList->wlanBssEntries[c].dot11Ssid.ucSSID, "MediCam_"))
+          pIfInfo = (WLAN_INTERFACE_INFO *)&pIfList->InterfaceInfo[ifaceNum];
+          PWLAN_BSS_LIST WlanBssList;
+          if (WlanGetNetworkBssList(hClient, &pIfInfo->InterfaceGuid, pDotSSid, dot11_BSS_type_independent, FALSE, NULL, &WlanBssList) == ERROR_SUCCESS)
           {
-            napi_value ssid, rssi, scan_result;
-            status = napi_create_object(env, &scan_result);
-            status = napi_create_string_utf8(env, (char *)WlanBssList->wlanBssEntries[c].dot11Ssid.ucSSID, (size_t)WlanBssList->wlanBssEntries[c].dot11Ssid.uSSIDLength, &ssid);
-            status = napi_create_int64(env, WlanBssList->wlanBssEntries[c].lRssi, &rssi);
-            status = napi_set_named_property(env, scan_result, "ssid", ssid);
-            status = napi_set_named_property(env, scan_result, "rssi", rssi);
-            status = napi_set_element(env, scan_result_arr, correct_counter, scan_result);
-            correct_counter++;
+            WCHAR GuidString[40] = {0};
+            uint32_t correct_counter = 0;
+            StringFromGUID2(pIfInfo->InterfaceGuid, (LPOLESTR)&GuidString, 39);
+            wprintf(L"===========%ws=============\n", GuidString);
+            for (int c = 0; c < WlanBssList->dwNumberOfItems; c++)
+            {
+              wprintf(L"SSID: %hs\n", WlanBssList->wlanBssEntries[c].dot11Ssid.ucSSID);
+              wprintf(L"MAC: %02x:%02x:%02x:%02x:%02x:%02x\n",
+                      WlanBssList->wlanBssEntries[c].dot11Bssid[0],
+                      WlanBssList->wlanBssEntries[c].dot11Bssid[1],
+                      WlanBssList->wlanBssEntries[c].dot11Bssid[2],
+                      WlanBssList->wlanBssEntries[c].dot11Bssid[3],
+                      WlanBssList->wlanBssEntries[c].dot11Bssid[4],
+                      WlanBssList->wlanBssEntries[c].dot11Bssid[5]);
+              wprintf(L"RSSI: %ld\n", WlanBssList->wlanBssEntries[c].lRssi);
+              wprintf(L"---------------------------\n");
+              if (strstr((char *)WlanBssList->wlanBssEntries[c].dot11Ssid.ucSSID, "MediCam_"))
+              {
+                napi_value ssid, rssi, scan_result;
+                status = napi_create_object(env, &scan_result);
+                status = napi_create_string_utf8(env, (char *)WlanBssList->wlanBssEntries[c].dot11Ssid.ucSSID, (size_t)WlanBssList->wlanBssEntries[c].dot11Ssid.uSSIDLength, &ssid);
+                status = napi_create_int64(env, WlanBssList->wlanBssEntries[c].lRssi, &rssi);
+                status = napi_set_named_property(env, scan_result, "ssid", ssid);
+                status = napi_set_named_property(env, scan_result, "rssi", rssi);
+                status = napi_set_element(env, scan_result_arr, correct_counter, scan_result);
+                correct_counter++;
+              }
+            }
           }
         }
       }
     }
     assert(status == napi_ok);
-    if (pIfList != NULL)
-    {
-      WlanFreeMemory(pIfList);
-      pIfList = NULL;
-    }
-    if (hClient != NULL)
-    {
-      WlanCloseHandle(hClient, NULL);
-    }
     return scan_result_arr;
   }
+}
+
+napi_value Wlanfree(napi_env env, napi_callback_info info)
+{
+  if (pIfList != NULL)
+  {
+    WlanFreeMemory(pIfList);
+  }
+  if (pDotSSid != NULL)
+  {
+    WlanFreeMemory(pDotSSid);
+  }
+  if (WlanBssList != NULL)
+  {
+    WlanFreeMemory(WlanBssList);
+  }
+  if (hClient != NULL)
+  {
+    WlanCloseHandle(hClient, NULL);
+  }
+  return nullptr;
 }
 
 napi_value getScanCB(napi_env env, napi_callback_info info)
@@ -146,8 +207,12 @@ napi_value getScanCB(napi_env env, napi_callback_info info)
 napi_value Init(napi_env env, napi_value exports)
 {
   napi_status status;
-  napi_property_descriptor desc = DECLARE_NAPI_METHOD("wifiscanCb", getScanCB);
-  status = napi_define_properties(env, exports, 1, &desc);
+  napi_property_descriptor scanDesc = DECLARE_NAPI_METHOD("wlanScan", getScanCB);
+  napi_property_descriptor initDesc = DECLARE_NAPI_METHOD("wlanInit", WlanInit);
+  napi_property_descriptor freeDesc = DECLARE_NAPI_METHOD("wlanFree", Wlanfree);
+  status = napi_define_properties(env, exports, 1, &scanDesc);
+  status = napi_define_properties(env, exports, 1, &initDesc);
+  status = napi_define_properties(env, exports, 1, &freeDesc);
   assert(status == napi_ok);
   return exports;
 }
