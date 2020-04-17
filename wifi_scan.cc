@@ -54,9 +54,9 @@ napi_value Scan(napi_env env, napi_callback_info info)
     for (ifaceNum = 0; ifaceNum < (int)pIfList->dwNumberOfItems; ifaceNum++)
     {
       pIfInfo = (WLAN_INTERFACE_INFO *)&pIfList->InterfaceInfo[ifaceNum];
-      WLAN_RAW_DATA WlanRawData;
+      PWLAN_RAW_DATA WlanRawData = NULL;
       wprintf(L"%ls Scanning...\n", pIfInfo->strInterfaceDescription);
-      dwResult = WlanScan(hClient, &pIfInfo->InterfaceGuid, pDotSSid, &WlanRawData, NULL);
+      dwResult = WlanScan(hClient, &pIfInfo->InterfaceGuid, pDotSSid, WlanRawData, NULL);
       if (dwResult != ERROR_SUCCESS)
       {
         wprintf(L"WlanScan failed with error: %u\n", dwResult);
