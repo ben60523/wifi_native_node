@@ -67,7 +67,9 @@ napi_value WlanInit(napi_env env, napi_callback_info info)
 
 napi_value Scan(napi_env env, napi_callback_info info)
 {
-  if (hClient == NULL) {
+  if (hClient == NULL)
+  {
+
     return nullptr;
   }
   napi_status status;
@@ -86,13 +88,10 @@ napi_value Scan(napi_env env, napi_callback_info info)
   }
   else
   {
-    wprintf(L"Num Entries: %lu\n", pIfList->dwNumberOfItems);
-    wprintf(L"Current Index: %lu\n", pIfList->dwIndex);
     for (ifaceNum = 0; ifaceNum < (int)pIfList->dwNumberOfItems; ifaceNum++)
     {
       pIfInfo = (WLAN_INTERFACE_INFO *)&pIfList->InterfaceInfo[ifaceNum];
       PWLAN_RAW_DATA WlanRawData = NULL;
-      wprintf(L"%ls Scanning...\n", pIfInfo->strInterfaceDescription);
       callbackInfo.interfaceGUID = pIfInfo->InterfaceGuid;
       callbackInfo.handleEvent = CreateEvent(
           nullptr,
@@ -116,22 +115,9 @@ napi_value Scan(napi_env env, napi_callback_info info)
           PWLAN_BSS_LIST WlanBssList;
           if (WlanGetNetworkBssList(hClient, &pIfInfo->InterfaceGuid, pDotSSid, dot11_BSS_type_independent, FALSE, NULL, &WlanBssList) == ERROR_SUCCESS)
           {
-            WCHAR GuidString[40] = {0};
             uint32_t correct_counter = 0;
-            StringFromGUID2(pIfInfo->InterfaceGuid, (LPOLESTR)&GuidString, 39);
-            wprintf(L"===========%ws=============\n", GuidString);
             for (int c = 0; c < WlanBssList->dwNumberOfItems; c++)
             {
-              wprintf(L"SSID: %hs\n", WlanBssList->wlanBssEntries[c].dot11Ssid.ucSSID);
-              wprintf(L"MAC: %02x:%02x:%02x:%02x:%02x:%02x\n",
-                      WlanBssList->wlanBssEntries[c].dot11Bssid[0],
-                      WlanBssList->wlanBssEntries[c].dot11Bssid[1],
-                      WlanBssList->wlanBssEntries[c].dot11Bssid[2],
-                      WlanBssList->wlanBssEntries[c].dot11Bssid[3],
-                      WlanBssList->wlanBssEntries[c].dot11Bssid[4],
-                      WlanBssList->wlanBssEntries[c].dot11Bssid[5]);
-              wprintf(L"RSSI: %ld\n", WlanBssList->wlanBssEntries[c].lRssi);
-              wprintf(L"---------------------------\n");
               if (strstr((char *)WlanBssList->wlanBssEntries[c].dot11Ssid.ucSSID, "MediCam_"))
               {
                 napi_value ssid, rssi, scan_result;
