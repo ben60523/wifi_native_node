@@ -6,13 +6,15 @@
   "private": true,
   "dependencies": {
     "bindings": "~1.2.1",
-    "node-addon-api": "^2.0.0"
+    "node-addon-api": "^2.0.0",
+    "wifi-control": "https://github.com/ben60523/wifi-control-node.git"
   },
   "devDependencies": {
     "node-gyp": "^6.1.0"
   },
   "scripts": {
-    "test": "node example/wifi_scan.js"
+    "test_scan": "node example/wifi_scan.js",
+    "test_connect": "node example/wifi_connect.js"
   },
   "gypfile": true
 }
