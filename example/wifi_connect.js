@@ -3,8 +3,8 @@ var wifi_native = require("../index");
 wifi_native.init();
 
 let ap = {
-    ssid: "MediCam_DFBAD1",
-    password: "1234567890"
+    ssid: "ap_ssid",
+    password: "ap_pw"
 }
 setTimeout(() => {
     wifi_native.scan().then((res) => {

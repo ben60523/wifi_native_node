@@ -22,7 +22,7 @@ typedef struct _WLAN_CALLBACK_INFO
 
 HANDLE hClient = NULL;
 WLAN_CALLBACK_INFO callbackInfo = {0};
-PWLAN_BSS_LIST WlanBssList;
+PWLAN_BSS_LIST WlanBssList = NULL;
 PWLAN_INTERFACE_INFO pIfInfo = NULL;
 PWLAN_INTERFACE_INFO_LIST pIfList = NULL;
 PDOT11_SSID pDotSSid = NULL;
@@ -38,8 +38,7 @@ void wlanCallback(WLAN_NOTIFICATION_DATA *WlanNotificationData, PVOID myContext)
   {
     return;
   }
-  if ((WlanNotificationData->NotificationCode == wlan_notification_acm_scan_complete) ||
-      (WlanNotificationData->NotificationCode == wlan_notification_acm_scan_fail))
+  if (WlanNotificationData->NotificationCode == wlan_notification_acm_scan_complete)
   {
     callbackInfo->callbackReason = WlanNotificationData->NotificationCode;
     SetEvent(callbackInfo->handleEvent);
@@ -51,29 +50,6 @@ void wlanCallback(WLAN_NOTIFICATION_DATA *WlanNotificationData, PVOID myContext)
     SetEvent(callbackInfo->handleEvent);
   }
   return;
-}
-DWORD StringWToSsid(__in LPCWSTR strSsid, __out PDOT11_SSID pSsid)
-{
-  DWORD dwRetCode = ERROR_SUCCESS;
-  BYTE pbSsid[DOT11_SSID_MAX_LENGTH + 1] = {0};
-  if (strSsid == NULL || pSsid == NULL)
-  {
-    dwRetCode = ERROR_INVALID_PARAMETER;
-  }
-  else
-  {
-    pSsid->uSSIDLength = WideCharToMultiByte(CP_UTF8,
-                                             0,
-                                             strSsid,
-                                             -1,
-                                             (LPSTR)pbSsid,
-                                             sizeof(pbSsid),
-                                             NULL,
-                                             NULL);
-    pSsid->uSSIDLength--;
-    memcpy(&pSsid->ucSSID, pbSsid, pSsid->uSSIDLength);
-  }
-  return dwRetCode;
 }
 
 napi_value WlanInit(napi_env env, napi_callback_info info)
@@ -123,11 +99,7 @@ napi_value Scan(napi_env env, napi_callback_info info)
       pIfInfo = (WLAN_INTERFACE_INFO *)&pIfList->InterfaceInfo[ifaceNum];
       PWLAN_RAW_DATA WlanRawData = NULL;
       callbackInfo.interfaceGUID = pIfInfo->InterfaceGuid;
-      callbackInfo.handleEvent = CreateEvent(
-          nullptr,
-          FALSE,
-          FALSE,
-          nullptr);
+      callbackInfo.handleEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
       dwResult = WlanScan(hClient, &pIfInfo->InterfaceGuid, pDotSSid, WlanRawData, NULL);
       if (dwResult != ERROR_SUCCESS)
       {
@@ -164,6 +136,7 @@ napi_value Scan(napi_env env, napi_callback_info info)
       }
     }
     assert(status == napi_ok);
+    CloseHandle(callbackInfo.handleEvent);
     return scan_result_arr;
   }
 }
@@ -173,6 +146,7 @@ napi_value Connect(napi_env env, napi_callback_info info)
   napi_status status;
   napi_value args[4];
   napi_value argv[1];
+  unsigned int connectionFlag = 0;
   size_t argc = 4;
   char GuidString[40] = {0};
   WCHAR GuidWString[40] = {0};
@@ -207,7 +181,10 @@ napi_value Connect(napi_env env, napi_callback_info info)
   status = napi_typeof(env, args[3], &valuetype3);
   assert(status == napi_ok);
 
-  if (valuetype0 != napi_string || valuetype1 != napi_string || valuetype2 != napi_string || valuetype3 != napi_function)
+  if (valuetype0 != napi_string ||
+      valuetype1 != napi_string ||
+      valuetype2 != napi_string ||
+      valuetype3 != napi_function)
   {
     napi_throw_type_error(env, nullptr, "Wrong arguments");
     return nullptr;
@@ -224,22 +201,20 @@ napi_value Connect(napi_env env, napi_callback_info info)
   mbstowcs(GuidWString, GuidString, 40);
   wprintf(L"GuidWstring: %ls\n", GuidWString);
   dwResult = CLSIDFromString(GuidWString, &guid_for_wlan);
-  if (dwResult != NOERROR) {
+  if (dwResult != NOERROR)
+  {
     wprintf(L"CLSIDFromString failed with error: %u\n", dwResult);
   }
-  printf("InterfaceGUID: %s\n", GuidString);
   WCHAR GuidString2[40] = {0};
   StringFromGUID2(guid_for_wlan, (LPOLESTR)&GuidString2, 39);
-  wprintf(L"===========%ws=============\n", GuidString2);
-
-  // get profile
+  
+  // get profile content
   size_t profileLen;
   status = napi_get_value_string_utf8(env, args[1], NULL, NULL, &profileLen);
   assert(status == napi_ok);
   char *profile = (char *)malloc(sizeof(char) * profileLen);
   status = napi_get_value_string_utf8(env, args[1], profile, profileLen + 1, &profileLen);
   assert(status == napi_ok);
-  printf("%s\n", profile);
 
   // get ssid
   size_t ssidLen;
@@ -248,37 +223,48 @@ napi_value Connect(napi_env env, napi_callback_info info)
   char *ssid = (char *)malloc(sizeof(char) * ssidLen);
   status = napi_get_value_string_utf8(env, args[2], ssid, ssidLen + 1, &ssidLen);
   assert(status == napi_ok);
-  printf("%s\n", ssid);
+  WCHAR *profileName = (WCHAR *)malloc(sizeof(WCHAR) * ssidLen);
+  mbstowcs(profileName, ssid, ssidLen + 1);
 
   napi_value cb = args[3];
 
   connectionParams.pDesiredBssidList = NULL;
   WCHAR *Wprofile = (WCHAR *)malloc(sizeof(WCHAR) * profileLen);
   mbstowcs(Wprofile, profile, profileLen + 1);
-  connectionParams.strProfile = Wprofile;
-  wprintf(L"Wprofile: %ls\n", Wprofile);
+  connectionParams.strProfile = profileName;
   connectionParams.dwFlags = 0;
-  connectionParams.dot11BssType = dot11_BSS_type_any;
+  connectionParams.dot11BssType = dot11_BSS_type_infrastructure;
   connectionParams.wlanConnectionMode = wlan_connection_mode_profile;
 
   PDOT11_SSID ap_ssid;
   if (!WlanBssList)
   {
     wprintf(L"need to scan first\n");
-    goto end;
+    dwResult = WlanGetNetworkBssList(hClient, &pIfInfo->InterfaceGuid, pDotSSid, dot11_BSS_type_independent, FALSE, NULL, &WlanBssList);
+    if (dwResult != ERROR_SUCCESS)
+    {
+      wprintf(L"WlanGetNetWorkBssList failed with error: %u\n", dwResult);
+      return nullptr;
+    }
   }
+  BOOL ssidflag = FALSE;
   for (int i = 0; i < WlanBssList->dwNumberOfItems; i++)
   {
     if (strstr(ssid, (char *)WlanBssList->wlanBssEntries[i].dot11Ssid.ucSSID))
     {
       ap_ssid = &WlanBssList->wlanBssEntries[i].dot11Ssid;
-      wprintf(L"found ap\n");
+      wprintf(L"found ap \n");
+      wprintf(L"SSID: %hs\n", ap_ssid->ucSSID);
+      ssidflag = TRUE;
       break;
     }
   }
-  wprintf(L"SSID: %hs\n", ap_ssid->ucSSID);
+  if (!ssidflag)
+  {
+    wprintf(L"AP NOT FOUND\n");
+    goto end;
+  }
   connectionParams.pDot11Ssid = ap_ssid;
-
   dwResult = WlanSetProfile(hClient, &guid_for_wlan, 0, Wprofile, NULL, TRUE, NULL, &profileReasonCode);
   if (dwResult != ERROR_SUCCESS)
   {
@@ -292,44 +278,46 @@ napi_value Connect(napi_env env, napi_callback_info info)
         wprintf(L"why: %ls\n", reasonStr);
       }
     }
-    napi_create_int32(env, 0, argv);
-    goto end;
+  }
+  wprintf(L"preparing to connect\n");
+  callbackInfo.interfaceGUID = guid_for_wlan;
+  callbackInfo.handleEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+  dwResult = WlanConnect(hClient, &guid_for_wlan, &connectionParams, NULL);
+  if (dwResult != ERROR_SUCCESS)
+  {
+    wprintf(L"WlanConnect failed with error: %u\n", dwResult);
+  }
+  DWORD waitConnectesult = WaitForSingleObject(callbackInfo.handleEvent, 15000);
+  if (waitConnectesult == WAIT_OBJECT_0)
+  {
+    if (callbackInfo.callbackReason == wlan_notification_acm_connection_complete)
+    {
+      wprintf(L"wlan_notification_acm_connection_complete\n");
+      connectionFlag = 1;
+    }
+    else if (callbackInfo.callbackReason == wlan_notification_acm_connection_attempt_fail)
+    {
+      wprintf(L"wlan_notification_acm_connection_attempt_fail\n");
+    }
+  }
+end:
+  if (connectionFlag == 1)
+  { // Successful
+    status = napi_create_int32(env, 1, argv);
   }
   else
-  {
-    wprintf(L"preparing to connect\n");
-    callbackInfo.interfaceGUID = guid_for_wlan;
-    callbackInfo.handleEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
-    dwResult = WlanConnect(hClient, &guid_for_wlan, &connectionParams, NULL);
-    if (dwResult != ERROR_SUCCESS)
-    {
-      wprintf(L"WlanConnect failed with error: %u\n", dwResult);
-      napi_create_int32(env, 0, argv);
-      goto end;
-    }
-
-    DWORD waitResult = WaitForSingleObject(callbackInfo.handleEvent, 15000);
-    if (waitResult == WAIT_OBJECT_0)
-    {
-      if (callbackInfo.callbackReason == wlan_notification_acm_connection_complete)
-      {
-        napi_create_int32(env, 1, argv);
-      }
-      else if (callbackInfo.callbackReason == wlan_notification_acm_connection_attempt_fail)
-      {
-        napi_create_int32(env, 0, argv);
-      }
-    }
+  { // Failed
+    status = napi_create_int32(env, 0, argv);
   }
-
-end:
+  if (callbackInfo.handleEvent)
+  {
+    CloseHandle(callbackInfo.handleEvent);
+  }
+  assert(status == napi_ok);
   napi_value global;
   status = napi_get_global(env, &global);
   assert(status == napi_ok);
   napi_value result;
-  free(Wprofile);
-  free(profile);
-  free(ssid);
   status = napi_call_function(env, global, cb, 1, argv, &result);
   assert(status == napi_ok);
   return nullptr;
@@ -340,18 +328,22 @@ napi_value Wlanfree(napi_env env, napi_callback_info info)
   if (pIfList != NULL)
   {
     WlanFreeMemory(pIfList);
+    pIfList = NULL;
   }
   if (pDotSSid != NULL)
   {
     WlanFreeMemory(pDotSSid);
+    pDotSSid = NULL;
   }
   if (WlanBssList != NULL)
   {
     WlanFreeMemory(WlanBssList);
+    WlanBssList = NULL;
   }
   if (hClient != NULL)
   {
     WlanCloseHandle(hClient, NULL);
+    hClient = NULL;
   }
   return nullptr;
 }

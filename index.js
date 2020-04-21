@@ -73,7 +73,6 @@ var free = function () {
 
 var connect = function (_ap, adapter) {
     let iface = wifiControl.getIfaceState();
-    console.log(iface)
     let guid, profile;
     for (let ifaceNum = 0; ifaceNum < iface.length; ifaceNum++) {
         if (iface[ifaceNum].adapterName == adapter) {
