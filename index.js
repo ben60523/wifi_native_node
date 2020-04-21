@@ -1,4 +1,4 @@
-var wifi_native = require('bindings')('wifi_scan');
+var wifi_native = require('bindings')('wifi_native');
 var wifiControl = require("wifi-control");
 var fs = require("fs");
 

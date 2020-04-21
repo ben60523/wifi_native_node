@@ -1,8 +1,8 @@
 {
   "targets": [
     {
-      "target_name": "wifi_scan",
-      "sources": [ "wifi_scan.cc" ]
+      "target_name": "wifi_native",
+      "sources": [ "wifi_native.cc" ]
     }
   ]
 }
