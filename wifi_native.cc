@@ -197,7 +197,8 @@ napi_value Connect(napi_env env, napi_callback_info info)
     wprintf(L"arguments type are all correct\n");
   }
 
-  if (!initflag) {
+  if (!initflag)
+  {
     goto end;
   }
   // get guid
@@ -239,35 +240,10 @@ napi_value Connect(napi_env env, napi_callback_info info)
   connectionParams.dot11BssType = dot11_BSS_type_infrastructure;
   connectionParams.wlanConnectionMode = wlan_connection_mode_profile;
 
-  PDOT11_SSID ap_ssid;
-  if (!WlanBssList)
-  {
-    wprintf(L"need to scan first\n");
-    dwResult = WlanGetNetworkBssList(hClient, &pIfInfo->InterfaceGuid, pDotSSid, dot11_BSS_type_independent, FALSE, NULL, &WlanBssList);
-    if (dwResult != ERROR_SUCCESS)
-    {
-      wprintf(L"WlanGetNetWorkBssList failed with error: %u\n", dwResult);
-      return nullptr;
-    }
-  }
-  BOOL ssidflag = FALSE;
-  for (int i = 0; i < WlanBssList->dwNumberOfItems; i++)
-  {
-    if (strstr(ssid, (char *)WlanBssList->wlanBssEntries[i].dot11Ssid.ucSSID))
-    {
-      ap_ssid = &WlanBssList->wlanBssEntries[i].dot11Ssid;
-      wprintf(L"found ap \n");
-      wprintf(L"SSID: %hs\n", ap_ssid->ucSSID);
-      ssidflag = TRUE;
-      break;
-    }
-  }
-  if (!ssidflag)
-  {
-    wprintf(L"AP NOT FOUND\n");
-    goto end;
-  }
-  connectionParams.pDot11Ssid = ap_ssid;
+  DOT11_SSID ap_ssid;
+  ap_ssid.uSSIDLength = (ULONG)ssidLen;
+  memcpy_s(ap_ssid.ucSSID,32 , (UCHAR *)ssid, ssidLen);
+  connectionParams.pDot11Ssid = &ap_ssid;
   dwResult = WlanSetProfile(hClient, &guid_for_wlan, 0, Wprofile, NULL, TRUE, NULL, &profileReasonCode);
   if (dwResult != ERROR_SUCCESS)
   {
@@ -364,31 +340,6 @@ napi_value getScanCB(napi_env env, napi_callback_info info)
 
   napi_value argv[1];
   argv[0] = Scan(env, info);
-  assert(status == napi_ok);
-
-  napi_value global;
-  status = napi_get_global(env, &global);
-  assert(status == napi_ok);
-
-  napi_value result;
-  status = napi_call_function(env, global, cb, 1, argv, &result);
-  assert(status == napi_ok);
-
-  return nullptr;
-}
-
-napi_value getConnectCB(napi_env env, napi_callback_info info)
-{
-  size_t argc = 1;
-  napi_status status;
-  napi_value args[1];
-  status = napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
-  assert(status == napi_ok);
-
-  napi_value cb = args[0];
-
-  napi_value argv[1];
-  argv[0] = Connect(env, info);
   assert(status == napi_ok);
 
   napi_value global;
