@@ -85,11 +85,19 @@ var connect = function (_ap, adapter) {
     profile = writeProfile(_ap);
     let profileContent = fs.readFileSync(profile, { encoding: 'utf8' });
     console.log(profile);
+    let adapterName = adapter
     return new Promise((resolve, reject) => {
         wifi_native.wlanConnect(guid, profileContent, _ap.ssid, (result) => {
             if (result == 1) {
                 fs.unlinkSync(profile);
-                resolve();
+                let interval = setInterval(() => {
+                    let ifStates = wifiControl.getIfaceState();
+                    ifState = ifStates.find(interface => interface.adapterName === adapterName)
+                    if (ifStates.success && ((ifState.connection === "connected") || (ifState.connection === "disconnected"))) {
+                        clearInterval(interval)
+                        resolve();
+                    }
+                }, 250)
             } else {
                 fs.unlinkSync(profile);
                 reject();
