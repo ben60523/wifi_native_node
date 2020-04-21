@@ -26,6 +26,7 @@ PWLAN_BSS_LIST WlanBssList = NULL;
 PWLAN_INTERFACE_INFO pIfInfo = NULL;
 PWLAN_INTERFACE_INFO_LIST pIfList = NULL;
 PDOT11_SSID pDotSSid = NULL;
+BOOL initflag = FALSE;
 
 void wlanCallback(WLAN_NOTIFICATION_DATA *WlanNotificationData, PVOID myContext)
 {
@@ -68,15 +69,17 @@ napi_value WlanInit(napi_env env, napi_callback_info info)
   {
     wprintf(L"WlanRegisterNotification failed with error: %u\n", dwResult);
   }
+  initflag = TRUE;
   return nullptr;
 }
 
 napi_value Scan(napi_env env, napi_callback_info info)
 {
-  if (hClient == NULL)
+  if (!initflag)
   {
-    napi_throw_error(env, nullptr, "Error: you should call init() first...\n");
-    return nullptr;
+    napi_value uninit;
+    napi_create_string_utf8(env, "You should call init() first", 30, &uninit);
+    return uninit;
   }
   napi_status status;
   napi_value scan_result_arr = NULL;
@@ -193,6 +196,10 @@ napi_value Connect(napi_env env, napi_callback_info info)
   {
     wprintf(L"arguments type are all correct\n");
   }
+
+  if (!initflag) {
+    goto end;
+  }
   // get guid
   size_t strSize = 40;
   status = napi_get_value_string_utf8(env, args[0], GuidString, strSize, &strSize);
@@ -205,9 +212,7 @@ napi_value Connect(napi_env env, napi_callback_info info)
   {
     wprintf(L"CLSIDFromString failed with error: %u\n", dwResult);
   }
-  WCHAR GuidString2[40] = {0};
-  StringFromGUID2(guid_for_wlan, (LPOLESTR)&GuidString2, 39);
-  
+
   // get profile content
   size_t profileLen;
   status = napi_get_value_string_utf8(env, args[1], NULL, NULL, &profileLen);
@@ -225,8 +230,6 @@ napi_value Connect(napi_env env, napi_callback_info info)
   assert(status == napi_ok);
   WCHAR *profileName = (WCHAR *)malloc(sizeof(WCHAR) * ssidLen);
   mbstowcs(profileName, ssid, ssidLen + 1);
-
-  napi_value cb = args[3];
 
   connectionParams.pDesiredBssidList = NULL;
   WCHAR *Wprofile = (WCHAR *)malloc(sizeof(WCHAR) * profileLen);
@@ -314,6 +317,7 @@ end:
     CloseHandle(callbackInfo.handleEvent);
   }
   assert(status == napi_ok);
+  napi_value cb = args[3];
   napi_value global;
   status = napi_get_global(env, &global);
   assert(status == napi_ok);

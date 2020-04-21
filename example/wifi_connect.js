@@ -16,7 +16,8 @@ setTimeout(() => {
             console.log("connection failed");
             wifi_native.free();
         });
-    }).catch(() => {
+    }).catch((res) => {
+        console.log(res)
         console.log("scan failed");
     })
 }, 1000);

@@ -59,7 +59,7 @@ var init = function () {
 var scan = function () {
     return new Promise((resolve, reject) => {
         wifi_native.wlanScan((MediCamNetWorks) => {
-            if (MediCamNetWorks)
+            if (Array.isArray(MediCamNetWorks))
                 resolve(MediCamNetWorks);
             else
                 reject(MediCamNetWorks);
