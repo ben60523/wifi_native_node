@@ -28,6 +28,15 @@ PWLAN_INTERFACE_INFO_LIST pIfList = NULL;
 PDOT11_SSID pDotSSid = NULL;
 BOOL initflag = FALSE;
 
+void free_memory(void *p)
+{
+  if (p)
+  {
+    free(p);
+    p = NULL;
+  }
+}
+
 void wlanCallback(WLAN_NOTIFICATION_DATA *WlanNotificationData, PVOID myContext)
 {
   WLAN_CALLBACK_INFO *callbackInfo = (WLAN_CALLBACK_INFO *)myContext;
@@ -156,6 +165,13 @@ napi_value Connect(napi_env env, napi_callback_info info)
   DWORD dwResult;
   DWORD profileReasonCode;
   WLAN_CONNECTION_PARAMETERS connectionParams;
+  GUID guid_for_wlan;
+  char *profile = NULL;
+  char *ssid = NULL;
+  WCHAR *profileName = NULL;
+  WCHAR *Wprofile = NULL;
+  DOT11_SSID ap_ssid;
+
   status = napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
   assert(status == napi_ok);
   if (argc < 4)
@@ -205,7 +221,6 @@ napi_value Connect(napi_env env, napi_callback_info info)
   size_t strSize = 40;
   status = napi_get_value_string_utf8(env, args[0], GuidString, strSize, &strSize);
   assert(status == napi_ok);
-  GUID guid_for_wlan;
   mbstowcs(GuidWString, GuidString, 40);
   wprintf(L"GuidWstring: %ls\n", GuidWString);
   dwResult = CLSIDFromString(GuidWString, &guid_for_wlan);
@@ -213,37 +228,43 @@ napi_value Connect(napi_env env, napi_callback_info info)
   {
     wprintf(L"CLSIDFromString failed with error: %u\n", dwResult);
   }
+  printf("Copy GUID... ok\n");
 
   // get profile content
   size_t profileLen;
   status = napi_get_value_string_utf8(env, args[1], NULL, NULL, &profileLen);
   assert(status == napi_ok);
-  char *profile = (char *)malloc(sizeof(char) * profileLen);
+  profile = (char *)malloc(sizeof(char) * profileLen);
   status = napi_get_value_string_utf8(env, args[1], profile, profileLen + 1, &profileLen);
   assert(status == napi_ok);
+  printf("Copy profile contents... ok\n");
 
   // get ssid
   size_t ssidLen;
   status = napi_get_value_string_utf8(env, args[2], NULL, NULL, &ssidLen);
   assert(status == napi_ok);
-  char *ssid = (char *)malloc(sizeof(char) * ssidLen);
+  ssid = (char *)malloc(sizeof(char) * ssidLen);
   status = napi_get_value_string_utf8(env, args[2], ssid, ssidLen + 1, &ssidLen);
   assert(status == napi_ok);
-  WCHAR *profileName = (WCHAR *)malloc(sizeof(WCHAR) * ssidLen);
+  profileName = (WCHAR *)malloc(sizeof(WCHAR) * ssidLen);
   mbstowcs(profileName, ssid, ssidLen + 1);
+  Wprofile = (WCHAR *)malloc(sizeof(WCHAR) * profileLen);
+  mbstowcs(Wprofile, profile, profileLen + 1);
+  printf("Copy profileName... ok\n");
+
+  ap_ssid.uSSIDLength = (ULONG)ssidLen;
+  printf("Copy ssid length... ok\n");
+  memcpy(ap_ssid.ucSSID, (UCHAR *)ssid, ssidLen);
+  printf("Copy ssid... ok\n");
 
   connectionParams.pDesiredBssidList = NULL;
-  WCHAR *Wprofile = (WCHAR *)malloc(sizeof(WCHAR) * profileLen);
-  mbstowcs(Wprofile, profile, profileLen + 1);
   connectionParams.strProfile = profileName;
   connectionParams.dwFlags = 0;
   connectionParams.dot11BssType = dot11_BSS_type_infrastructure;
   connectionParams.wlanConnectionMode = wlan_connection_mode_profile;
-
-  DOT11_SSID ap_ssid;
-  ap_ssid.uSSIDLength = (ULONG)ssidLen;
-  memcpy_s(ap_ssid.ucSSID,32 , (UCHAR *)ssid, ssidLen);
   connectionParams.pDot11Ssid = &ap_ssid;
+  printf("Set wlan_connection_params... ok\n");
+
   dwResult = WlanSetProfile(hClient, &guid_for_wlan, 0, Wprofile, NULL, TRUE, NULL, &profileReasonCode);
   if (dwResult != ERROR_SUCCESS)
   {
@@ -258,7 +279,8 @@ napi_value Connect(napi_env env, napi_callback_info info)
       }
     }
   }
-  wprintf(L"preparing to connect\n");
+  printf("setprofile... ok\n");
+
   callbackInfo.interfaceGUID = guid_for_wlan;
   callbackInfo.handleEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
   dwResult = WlanConnect(hClient, &guid_for_wlan, &connectionParams, NULL);
@@ -266,6 +288,8 @@ napi_value Connect(napi_env env, napi_callback_info info)
   {
     wprintf(L"WlanConnect failed with error: %u\n", dwResult);
   }
+  printf("wlanconnect... ok\n");
+
   DWORD waitConnectesult = WaitForSingleObject(callbackInfo.handleEvent, 15000);
   if (waitConnectesult == WAIT_OBJECT_0)
   {
@@ -280,6 +304,7 @@ napi_value Connect(napi_env env, napi_callback_info info)
     }
   }
 end:
+  //FIXME: FREE MEMORY
   if (connectionFlag == 1)
   { // Successful
     status = napi_create_int32(env, 1, argv);
@@ -292,6 +317,11 @@ end:
   {
     CloseHandle(callbackInfo.handleEvent);
   }
+  free_memory(profile);
+  free_memory(Wprofile);
+  free_memory(ssid);
+  free_memory(profileName);
+  printf("free char memory...ok\n");
   assert(status == napi_ok);
   napi_value cb = args[3];
   napi_value global;
