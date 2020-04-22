@@ -365,9 +365,7 @@ napi_value getScanCB(napi_env env, napi_callback_info info)
   napi_value args[1];
   status = napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
   assert(status == napi_ok);
-
   napi_value cb = args[0];
-
   napi_value argv[1];
   argv[0] = Scan(env, info);
   assert(status == napi_ok);
