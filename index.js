@@ -90,12 +90,21 @@ var connect = function (_ap, adapter) {
         wifi_native.wlanConnect(guid, profileContent, _ap.ssid, (result) => {
             if (result == 1) {
                 fs.unlinkSync(profile);
+                let failedCount = 0;
                 let interval = setInterval(() => {
                     let ifStates = wifiControl.getIfaceState();
                     ifState = ifStates.find(interface => interface.adapterName === adapterName)
                     if (ifStates.success && ((ifState.connection === "connected") || (ifState.connection === "disconnected"))) {
-                        clearInterval(interval)
-                        resolve();
+                        if (failedCount > 20) {
+                            clearInterval(interval);
+                            reject();
+                        }
+                        if (ifState.connection === "connected" && ifState.ssid === _ap.ssid) {
+                            failedCount = 0;
+                            clearInterval(interval)
+                            resolve();
+                        }
+                        failedCount++;
                     }
                 }, 250)
             } else {
