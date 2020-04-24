@@ -96,7 +96,7 @@ var connect = function (_ap, adapter) {
                     let ifStates = wifiControl.getIfaceState();
                     ifState = ifStates.find(interface => interface.adapterName === adapterName)
                     if (ifStates.success && ((ifState.connection === "connected") || (ifState.connection === "disconnected"))) {
-                        if (failedCount > 20) {
+                        if (failedCount > 40) {
                             clearInterval(interval);
                             reject();
                         }
