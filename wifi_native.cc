@@ -112,6 +112,7 @@ napi_value Scan(napi_env env, napi_callback_info info)
       PWLAN_RAW_DATA WlanRawData = NULL;
       callbackInfo.interfaceGUID = pIfInfo->InterfaceGuid;
       callbackInfo.handleEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+      printf("WlanScan... ");
       dwResult = WlanScan(hClient, &pIfInfo->InterfaceGuid, pDotSSid, WlanRawData, NULL);
       if (dwResult != ERROR_SUCCESS)
       {
@@ -123,11 +124,14 @@ napi_value Scan(napi_env env, napi_callback_info info)
     {
       if (callbackInfo.callbackReason == wlan_notification_acm_scan_complete)
       {
+        printf("ok\n");
         for (ifaceNum = 0; ifaceNum < (int)pIfList->dwNumberOfItems; ifaceNum++)
         {
           pIfInfo = (WLAN_INTERFACE_INFO *)&pIfList->InterfaceInfo[ifaceNum];
-          if (WlanGetNetworkBssList(hClient, &pIfInfo->InterfaceGuid, pDotSSid, dot11_BSS_type_independent, FALSE, NULL, &WlanBssList) == ERROR_SUCCESS)
+          printf("WlanShowNetworksList... ");
+          if (WlanGetNetworkBssList(hClient, &pIfInfo->InterfaceGuid, pDotSSid, dot11_BSS_type_infrastructure, FALSE, NULL, &WlanBssList) == ERROR_SUCCESS)
           {
+            printf("ok\n");
             uint32_t correct_counter = 0;
             for (int c = 0; c < WlanBssList->dwNumberOfItems; c++)
             {
@@ -218,28 +222,30 @@ napi_value Connect(napi_env env, napi_callback_info info)
     goto end;
   }
   // get guid
+  printf("Copy GUID... ");
   size_t strSize = 40;
   status = napi_get_value_string_utf8(env, args[0], GuidString, strSize, &strSize);
   assert(status == napi_ok);
   mbstowcs(GuidWString, GuidString, 40);
-  wprintf(L"GuidWstring: %ls\n", GuidWString);
   dwResult = CLSIDFromString(GuidWString, &guid_for_wlan);
   if (dwResult != NOERROR)
   {
     wprintf(L"CLSIDFromString failed with error: %u\n", dwResult);
   }
-  printf("Copy GUID... ok\n");
+  printf("ok\n");
 
   // get profile content
+  printf("Copy profile contents... ");
   size_t profileLen;
   status = napi_get_value_string_utf8(env, args[1], NULL, NULL, &profileLen);
   assert(status == napi_ok);
   profile = (char *)malloc(sizeof(char) * profileLen);
   status = napi_get_value_string_utf8(env, args[1], profile, profileLen + 1, &profileLen);
   assert(status == napi_ok);
-  printf("Copy profile contents... ok\n");
+  printf("ok\n");
 
   // get ssid
+  printf("Copy profileName... ");
   size_t ssidLen;
   status = napi_get_value_string_utf8(env, args[2], NULL, NULL, &ssidLen);
   assert(status == napi_ok);
@@ -250,21 +256,23 @@ napi_value Connect(napi_env env, napi_callback_info info)
   mbstowcs(profileName, ssid, ssidLen + 1);
   Wprofile = (WCHAR *)malloc(sizeof(WCHAR) * profileLen);
   mbstowcs(Wprofile, profile, profileLen + 1);
-  printf("Copy profileName... ok\n");
+  printf("ok\n");
 
+  printf("Copy ssid... ");
   ap_ssid.uSSIDLength = (ULONG)ssidLen;
-  printf("Copy ssid length... ok\n");
   memcpy(ap_ssid.ucSSID, (UCHAR *)ssid, ssidLen);
-  printf("Copy ssid... ok\n");
+  printf("ok\n");
 
+  printf("Set wlan_connection_params... ");
   connectionParams.pDesiredBssidList = NULL;
   connectionParams.strProfile = profileName;
   connectionParams.dwFlags = 0;
   connectionParams.dot11BssType = dot11_BSS_type_infrastructure;
   connectionParams.wlanConnectionMode = wlan_connection_mode_profile;
   connectionParams.pDot11Ssid = &ap_ssid;
-  printf("Set wlan_connection_params... ok\n");
+  printf("ok\n");
 
+  printf("WlanSetProfile... ");
   dwResult = WlanSetProfile(hClient, &guid_for_wlan, 0, Wprofile, NULL, TRUE, NULL, &profileReasonCode);
   if (dwResult != ERROR_SUCCESS)
   {
@@ -279,22 +287,23 @@ napi_value Connect(napi_env env, napi_callback_info info)
       }
     }
   }
-  printf("setprofile... ok\n");
+  printf("ok\n");
 
   callbackInfo.interfaceGUID = guid_for_wlan;
   callbackInfo.handleEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+  printf("wlanconnect... ");
   dwResult = WlanConnect(hClient, &guid_for_wlan, &connectionParams, NULL);
   if (dwResult != ERROR_SUCCESS)
   {
     wprintf(L"WlanConnect failed with error: %u\n", dwResult);
   }
-  printf("wlanconnect... ok\n");
 
   DWORD waitConnectesult = WaitForSingleObject(callbackInfo.handleEvent, 15000);
   if (waitConnectesult == WAIT_OBJECT_0)
   {
     if (callbackInfo.callbackReason == wlan_notification_acm_connection_complete)
     {
+      printf("ok\n");
       wprintf(L"wlan_notification_acm_connection_complete\n");
       connectionFlag = 1;
     }
@@ -317,11 +326,12 @@ end:
   {
     CloseHandle(callbackInfo.handleEvent);
   }
+  printf("free memory...");
   free_memory(profile);
   free_memory(Wprofile);
   free_memory(ssid);
   free_memory(profileName);
-  printf("free char memory...ok\n");
+  printf("ok\n");
   assert(status == napi_ok);
   napi_value cb = args[3];
   napi_value global;

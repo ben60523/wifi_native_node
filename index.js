@@ -78,13 +78,11 @@ var connect = function (_ap, adapter) {
         if (iface[ifaceNum].adapterName == adapter) {
             guid = iface[ifaceNum].guid;
             guid = "{" + guid + "}";
-            console.log(guid);
             break;
         }
     }
     profile = writeProfile(_ap);
     let profileContent = fs.readFileSync(profile, { encoding: 'utf8' });
-    console.log(profile);
     let adapterName = adapter
     return new Promise((resolve, reject) => {
         wifi_native.wlanConnect(guid, profileContent, _ap.ssid, (result) => {
