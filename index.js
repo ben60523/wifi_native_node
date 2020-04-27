@@ -60,7 +60,6 @@ var scan = function () {
     return new Promise((resolve, reject) => {
         wifi_native.wlanScan((MediCamNetWorks) => {
             if (Array.isArray(MediCamNetWorks)) {
-                console.log(MediCamNetWorks);
                 MediCamNetWorks = [...new Set(MediCamNetWorks)]
                 resolve(MediCamNetWorks);
             }
@@ -75,26 +74,30 @@ var free = function () {
 }
 
 var connect = function (_ap, adapter) {
-    let iface = wifiControl.getIfaceState();
-    let guid, profile;
-    for (let ifaceNum = 0; ifaceNum < iface.length; ifaceNum++) {
-        if (iface[ifaceNum].adapterName == adapter) {
-            guid = iface[ifaceNum].guid;
-            guid = "{" + guid + "}";
-            break;
-        }
-    }
-    profile = writeProfile(_ap);
-    let profileContent = fs.readFileSync(profile, { encoding: 'utf8' });
-    let adapterName = adapter
     return new Promise((resolve, reject) => {
+        let iface = wifiControl.getIfaceState();
+        let guid, profile;
+        for (let ifaceNum = 0; ifaceNum < iface.length; ifaceNum++) {
+            if (iface[ifaceNum].adapterName == adapter) {
+                guid = iface[ifaceNum].guid;
+                guid = "{" + guid + "}";
+                break;
+            }
+        }
+        if (!guid) {
+            console.log("Cannot find wlan interface");
+            reject();
+        }
+        profile = writeProfile(_ap);
+        let profileContent = fs.readFileSync(profile, { encoding: 'utf8' });
+        let adapterName = adapter
         wifi_native.wlanConnect(guid, profileContent, _ap.ssid, (result) => {
             if (result == 1) {
                 fs.unlinkSync(profile);
                 let failedCount = 0;
                 let interval = setInterval(() => {
                     let ifStates = wifiControl.getIfaceState();
-                    ifState = ifStates.find(interface => interface.adapterName === adapterName)
+                    let ifState = ifStates.find(interface => interface.adapterName === adapterName)
                     if (ifStates.success && ((ifState.connection === "connected") || (ifState.connection === "disconnected"))) {
                         if (failedCount > 40) {
                             clearInterval(interval);
