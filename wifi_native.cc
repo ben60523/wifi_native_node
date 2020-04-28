@@ -22,10 +22,6 @@ typedef struct _WLAN_CALLBACK_INFO
 
 HANDLE hClient = NULL;
 WLAN_CALLBACK_INFO callbackInfo = {0};
-PWLAN_BSS_LIST WlanBssList = NULL;
-PWLAN_INTERFACE_INFO pIfInfo = NULL;
-PWLAN_INTERFACE_INFO_LIST pIfList = NULL;
-PDOT11_SSID pDotSSid = NULL;
 BOOL initflag = FALSE;
 
 void free_memory(void *p)
@@ -103,6 +99,10 @@ napi_value Scan(napi_env env, napi_callback_info info)
   assert(status == napi_ok);
   napi_value cb = args[0];
   napi_value argv[1];
+  PWLAN_BSS_LIST WlanBssList = NULL;
+  PWLAN_INTERFACE_INFO pIfInfo = NULL;
+  PWLAN_INTERFACE_INFO_LIST pIfList = NULL;
+  PDOT11_SSID pDotSSid = NULL;
 
   unsigned int ifaceNum = 0;
   dwResult = WlanEnumInterfaces(hClient, NULL, &pIfList);
@@ -169,9 +169,23 @@ napi_value Scan(napi_env env, napi_callback_info info)
     napi_value result;
     status = napi_call_function(env, global, cb, 1, argv, &result);
     assert(status == napi_ok);
-
-    return nullptr;
   }
+  if (pIfList != NULL)
+  {
+    WlanFreeMemory(pIfList);
+    pIfList = NULL;
+  }
+  if (pDotSSid != NULL)
+  {
+    WlanFreeMemory(pDotSSid);
+    pDotSSid = NULL;
+  }
+  if (WlanBssList != NULL)
+  {
+    WlanFreeMemory(WlanBssList);
+    WlanBssList = NULL;
+  }
+  return nullptr;
 }
 
 napi_value Connect(napi_env env, napi_callback_info info)
@@ -362,21 +376,6 @@ end:
 
 napi_value Wlanfree(napi_env env, napi_callback_info info)
 {
-  if (pIfList != NULL)
-  {
-    WlanFreeMemory(pIfList);
-    pIfList = NULL;
-  }
-  if (pDotSSid != NULL)
-  {
-    WlanFreeMemory(pDotSSid);
-    pDotSSid = NULL;
-  }
-  if (WlanBssList != NULL)
-  {
-    WlanFreeMemory(WlanBssList);
-    WlanBssList = NULL;
-  }
   if (hClient != NULL)
   {
     WlanCloseHandle(hClient, NULL);
