@@ -87,6 +87,7 @@ var connect = function (_ap, adapter) {
         if (!guid) {
             console.log("Cannot find wlan interface");
             reject();
+            return;
         }
         profile = writeProfile(_ap);
         let profileContent = fs.readFileSync(profile, { encoding: 'utf8' });

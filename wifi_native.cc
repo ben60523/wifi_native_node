@@ -97,6 +97,12 @@ napi_value Scan(napi_env env, napi_callback_info info)
   DWORD dwRetVal = 0;
   GUID interfaceGuid;
   DWORD dwPrevNotifType = 0;
+  size_t argc = 1;
+  napi_value args[1];
+  status = napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+  assert(status == napi_ok);
+  napi_value cb = args[0];
+  napi_value argv[1];
 
   unsigned int ifaceNum = 0;
   dwResult = WlanEnumInterfaces(hClient, NULL, &pIfList);
@@ -153,7 +159,18 @@ napi_value Scan(napi_env env, napi_callback_info info)
     }
     assert(status == napi_ok);
     CloseHandle(callbackInfo.handleEvent);
-    return scan_result_arr;
+    argv[0] = scan_result_arr;
+    assert(status == napi_ok);
+
+    napi_value global;
+    status = napi_get_global(env, &global);
+    assert(status == napi_ok);
+
+    napi_value result;
+    status = napi_call_function(env, global, cb, 1, argv, &result);
+    assert(status == napi_ok);
+
+    return nullptr;
   }
 }
 
@@ -368,29 +385,6 @@ napi_value Wlanfree(napi_env env, napi_callback_info info)
   return nullptr;
 }
 
-napi_value getScanCB(napi_env env, napi_callback_info info)
-{
-  size_t argc = 1;
-  napi_status status;
-  napi_value args[1];
-  status = napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
-  assert(status == napi_ok);
-  napi_value cb = args[0];
-  napi_value argv[1];
-  argv[0] = Scan(env, info);
-  assert(status == napi_ok);
-
-  napi_value global;
-  status = napi_get_global(env, &global);
-  assert(status == napi_ok);
-
-  napi_value result;
-  status = napi_call_function(env, global, cb, 1, argv, &result);
-  assert(status == napi_ok);
-
-  return nullptr;
-}
-
 #define DECLARE_NAPI_METHOD(name, func)     \
   {                                         \
     name, 0, func, 0, 0, 0, napi_default, 0 \
@@ -399,7 +393,7 @@ napi_value getScanCB(napi_env env, napi_callback_info info)
 napi_value Init(napi_env env, napi_value exports)
 {
   napi_status status;
-  napi_property_descriptor scanDesc = DECLARE_NAPI_METHOD("wlanScan", getScanCB);
+  napi_property_descriptor scanDesc = DECLARE_NAPI_METHOD("wlanScan", Scan);
   napi_property_descriptor initDesc = DECLARE_NAPI_METHOD("wlanInit", WlanInit);
   napi_property_descriptor freeDesc = DECLARE_NAPI_METHOD("wlanFree", Wlanfree);
   napi_property_descriptor connectDesc = DECLARE_NAPI_METHOD("wlanConnect", Connect);
