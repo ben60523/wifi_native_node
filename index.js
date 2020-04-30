@@ -60,7 +60,14 @@ var scan = function () {
     return new Promise((resolve, reject) => {
         wifi_native.wlanScan((MediCamNetWorks) => {
             if (Array.isArray(MediCamNetWorks)) {
-                MediCamNetWorks = [...new Set(MediCamNetWorks)]
+                for (let j = 0; j < MediCamNetWorks.length; j++) {
+                    for (let i = j; i < MediCamNetWorks.length; i++) {
+                        if (MediCamNetWorks[j].ssid == MediCamNetWorks[i].ssid && i != j) {
+                            MediCamNetWorks.splice(i, 1)
+                            break;
+                        }
+                    }
+                }
                 resolve(MediCamNetWorks);
             }
             else
@@ -100,7 +107,7 @@ var connect = function (_ap, adapter) {
                     let ifStates = wifiControl.getIfaceState();
                     let ifState = ifStates.find(interface => interface.adapterName === adapterName)
                     if (ifStates.success && ((ifState.connection === "connected") || (ifState.connection === "disconnected"))) {
-                        if (failedCount > 40) {
+                        if (failedCount > 20) {
                             clearInterval(interval);
                             reject();
                         }
