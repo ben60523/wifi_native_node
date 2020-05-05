@@ -131,6 +131,7 @@ napi_value Scan(napi_env env, napi_callback_info info)
       if (callbackInfo.callbackReason == wlan_notification_acm_scan_complete)
       {
         printf("ok\n");
+        uint32_t correct_counter = 0;
         for (ifaceNum = 0; ifaceNum < (int)pIfList->dwNumberOfItems; ifaceNum++)
         {
           pIfInfo = (WLAN_INTERFACE_INFO *)&pIfList->InterfaceInfo[ifaceNum];
@@ -138,7 +139,6 @@ napi_value Scan(napi_env env, napi_callback_info info)
           if (WlanGetNetworkBssList(hClient, &pIfInfo->InterfaceGuid, pDotSSid, dot11_BSS_type_infrastructure, FALSE, NULL, &WlanBssList) == ERROR_SUCCESS)
           {
             printf("ok\n");
-            uint32_t correct_counter = 0;
             for (int c = 0; c < WlanBssList->dwNumberOfItems; c++)
             {
               if (strstr((char *)WlanBssList->wlanBssEntries[c].dot11Ssid.ucSSID, "MediCam_"))
