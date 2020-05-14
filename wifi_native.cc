@@ -112,6 +112,7 @@ napi_value Scan(napi_env env, napi_callback_info info)
   }
   else
   {
+    uint32_t correct_counter = 0;
     for (ifaceNum = 0; ifaceNum < (int)pIfList->dwNumberOfItems; ifaceNum++)
     {
       pIfInfo = (WLAN_INTERFACE_INFO *)&pIfList->InterfaceInfo[ifaceNum];
@@ -124,23 +125,21 @@ napi_value Scan(napi_env env, napi_callback_info info)
       {
         wprintf(L"WlanScan failed with error: %u\n", dwResult);
       }
-    }
-    DWORD waitResult = WaitForSingleObject(callbackInfo.handleEvent, 15000);
-    if (waitResult == WAIT_OBJECT_0)
-    {
-      if (callbackInfo.callbackReason == wlan_notification_acm_scan_complete)
+      DWORD waitResult = WaitForSingleObject(callbackInfo.handleEvent, 15000);
+      if (waitResult == WAIT_OBJECT_0)
       {
-        printf("ok\n");
-        uint32_t correct_counter = 0;
-        for (ifaceNum = 0; ifaceNum < (int)pIfList->dwNumberOfItems; ifaceNum++)
+        if (callbackInfo.callbackReason == wlan_notification_acm_scan_complete)
         {
-          pIfInfo = (WLAN_INTERFACE_INFO *)&pIfList->InterfaceInfo[ifaceNum];
+          printf("ok\n");
+
+          // pIfInfo = (WLAN_INTERFACE_INFO *)&pIfList->InterfaceInfo[ifaceNum];
           printf("WlanShowNetworksList... ");
           if (WlanGetNetworkBssList(hClient, &pIfInfo->InterfaceGuid, pDotSSid, dot11_BSS_type_infrastructure, FALSE, NULL, &WlanBssList) == ERROR_SUCCESS)
           {
             printf("ok\n");
             for (int c = 0; c < WlanBssList->dwNumberOfItems; c++)
             {
+              wprintf(L"ssid: %hs, rssi: %d\n", WlanBssList->wlanBssEntries[c].dot11Ssid.ucSSID, WlanBssList->wlanBssEntries[c].lRssi);
               if (strstr((char *)WlanBssList->wlanBssEntries[c].dot11Ssid.ucSSID, "MediCam_"))
               {
                 napi_value ssid, rssi, scan_result;
