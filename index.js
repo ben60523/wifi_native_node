@@ -60,11 +60,16 @@ var scan = function () {
     return new Promise((resolve, reject) => {
         wifi_native.wlanScan((MediCamNetWorks) => {
             if (Array.isArray(MediCamNetWorks)) {
-                for (let j = 0; j < MediCamNetWorks.length; j++) {
-                    for (let i = j; i < MediCamNetWorks.length; i++) {
-                        if (MediCamNetWorks[j].ssid == MediCamNetWorks[i].ssid && i != j) {
-                            MediCamNetWorks.splice(i, 1)
-                            break;
+                for (let j = MediCamNetWorks.length - 1; j >= 0; j--) {
+                    for (let i = MediCamNetWorks.length - 1; i >= 0; i--) {
+                        if (MediCamNetWorks[i] && MediCamNetWorks[j]) {
+                            if (MediCamNetWorks[j].ssid == MediCamNetWorks[i].ssid && i != j) {
+                                if (MediCamNetWorks[j].rssi >= MediCamNetWorks[i].rssi) {
+                                    MediCamNetWorks.splice(i, 1);
+                                } else {
+                                    MediCamNetWorks.splice(j, 1);
+                                }
+                            }
                         }
                     }
                 }
