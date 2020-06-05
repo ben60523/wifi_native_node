@@ -14,7 +14,8 @@
   },
   "scripts": {
     "test_scan": "node example/wifi_scan.js",
-    "test_connect": "node example/wifi_connect.js"
+    "test_connect": "node example/wifi_connect.js",
+    "test_disconnect": "node example/wifi_disconnect.js"
   },
   "gypfile": true
 }

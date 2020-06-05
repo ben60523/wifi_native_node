@@ -372,6 +372,73 @@ end:
   assert(status == napi_ok);
   return nullptr;
 }
+napi_value Disconnect(napi_env env, napi_callback_info info)
+{
+  napi_status status;
+  napi_value args[2];
+  napi_value argv[1];
+  size_t argc = 2;
+  char GuidString[40] = {0};
+  WCHAR GuidWString[40] = {0};
+  DWORD dwResult;
+  GUID guid_for_wlan;
+
+  status = napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+  assert(status == napi_ok);
+
+  napi_valuetype valuetype0;
+  status = napi_typeof(env, args[0], &valuetype0);
+  assert(status == napi_ok);
+
+  napi_valuetype valuetype1;
+  status = napi_typeof(env, args[1], &valuetype1);
+  assert(status == napi_ok);
+
+  if (valuetype0 != napi_string || valuetype1 != napi_function)
+  {
+    napi_throw_type_error(env, nullptr, "Wrong arguments");
+    return nullptr;
+  }
+  else
+  {
+    wprintf(L"arguments type are all correct\n");
+  }
+
+  if (!initflag)
+  {
+    return nullptr;
+  }
+  // get guid
+  printf("Copy GUID... ");
+  size_t strSize = 40;
+  status = napi_get_value_string_utf8(env, args[0], GuidString, strSize, &strSize);
+  assert(status == napi_ok);
+  mbstowcs(GuidWString, GuidString, 40);
+  dwResult = CLSIDFromString(GuidWString, &guid_for_wlan);
+  if (dwResult != NOERROR)
+  {
+    wprintf(L"CLSIDFromString failed with error: %u\n", dwResult);
+  }
+  printf("ok\n");
+  dwResult = WlanDisconnect(hClient, &guid_for_wlan, NULL);
+  if (dwResult == ERROR_SUCCESS)
+  {
+    status = napi_create_int32(env, 1, argv);
+  }
+  else
+  {
+    wprintf(L"WlanDisconnect failed with error: %u\n", dwResult);
+    status = napi_create_int32(env, 0, argv);
+  }
+  napi_value cb = args[1];
+  napi_value global;
+  status = napi_get_global(env, &global);
+  assert(status == napi_ok);
+  napi_value result;
+  status = napi_call_function(env, global, cb, 1, argv, &result);
+  assert(status == napi_ok);
+  return nullptr;
+}
 
 napi_value Wlanfree(napi_env env, napi_callback_info info)
 {
@@ -395,10 +462,12 @@ napi_value Init(napi_env env, napi_value exports)
   napi_property_descriptor initDesc = DECLARE_NAPI_METHOD("wlanInit", WlanInit);
   napi_property_descriptor freeDesc = DECLARE_NAPI_METHOD("wlanFree", Wlanfree);
   napi_property_descriptor connectDesc = DECLARE_NAPI_METHOD("wlanConnect", Connect);
+  napi_property_descriptor disconnectDesc = DECLARE_NAPI_METHOD("wlanDisconnect", Disconnect);
   status = napi_define_properties(env, exports, 1, &scanDesc);
   status = napi_define_properties(env, exports, 1, &initDesc);
   status = napi_define_properties(env, exports, 1, &freeDesc);
   status = napi_define_properties(env, exports, 1, &connectDesc);
+  status = napi_define_properties(env, exports, 1, &disconnectDesc);
   assert(status == napi_ok);
   return exports;
 }

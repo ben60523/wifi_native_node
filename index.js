@@ -132,4 +132,39 @@ var connect = function (_ap, adapter) {
     })
 }
 
-module.exports = { init, scan, connect, free };
+var disconnect = function (adapter) {
+    return new Promise((resolve, reject) => {
+        let iface = wifiControl.getIfaceState();
+        let guid;
+        for (let ifaceNum = 0; ifaceNum < iface.length; ifaceNum++) {
+            if (iface[ifaceNum].adapterName == adapter) {
+                if (iface[ifaceNum].connection == "connected") {
+                    guid = iface[ifaceNum].guid;
+                    guid = "{" + guid + "}";
+                    break;
+                } else {
+                    console.log("This interface hasn't connect any AP")
+                    reject();
+                    return;
+                }
+            }
+        }
+        if (!guid) {
+            console.log("Cannot find wlan interface");
+            reject();
+            return;
+        }
+        wifi_native.wlanDisconnect(guid, (status) => {
+            if (status == 1) {
+                console.log("wlan disconnected");
+                resolve();
+            } else {
+                console.log("disconnect failed");
+                reject();
+            }
+        })
+    });
+
+}
+
+module.exports = { init, scan, connect, disconnect, free };
