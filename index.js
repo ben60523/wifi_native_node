@@ -58,25 +58,31 @@ var init = function () {
 
 var scan = function () {
     return new Promise((resolve, reject) => {
-        wifi_native.wlanScan((MediCamNetWorks) => {
-            if (Array.isArray(MediCamNetWorks)) {
-                for (let j = MediCamNetWorks.length - 1; j >= 0; j--) {
-                    for (let i = MediCamNetWorks.length - 1; i >= 0; i--) {
-                        if (MediCamNetWorks[i] && MediCamNetWorks[j]) {
-                            if (MediCamNetWorks[j].ssid == MediCamNetWorks[i].ssid && i != j) {
-                                if (MediCamNetWorks[j].rssi >= MediCamNetWorks[i].rssi) {
-                                    MediCamNetWorks.splice(i, 1);
-                                } else {
-                                    MediCamNetWorks.splice(j, 1);
+        wifi_native.wlanScan((status) => {
+            if (status == 1) {
+                wifi_native.wlanGetNetworkList((MediCamNetWorks) => {
+                    if (Array.isArray(MediCamNetWorks)) {
+                        for (let j = MediCamNetWorks.length - 1; j >= 0; j--) {
+                            for (let i = MediCamNetWorks.length - 1; i >= 0; i--) {
+                                if (MediCamNetWorks[i] && MediCamNetWorks[j]) {
+                                    if (MediCamNetWorks[j].ssid == MediCamNetWorks[i].ssid && i != j) {
+                                        if (MediCamNetWorks[j].rssi >= MediCamNetWorks[i].rssi) {
+                                            MediCamNetWorks.splice(i, 1);
+                                        } else {
+                                            MediCamNetWorks.splice(j, 1);
+                                        }
+                                    }
                                 }
                             }
                         }
+                        resolve(MediCamNetWorks);
                     }
-                }
-                resolve(MediCamNetWorks);
+                    else
+                        reject(MediCamNetWorks);
+                })
+            } else {
+                reject("Scan Failed");
             }
-            else
-                reject(MediCamNetWorks);
         });
     });
 };
