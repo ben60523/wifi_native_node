@@ -56,6 +56,18 @@ var init = function () {
     })
 };
 
+var getNetworkList = function () {
+    return new Promise((resolve, reject) => {
+        wifi_native.wlanGetNetworkList((APs) => {
+            if (APs) {
+                resolve(APs);
+            } else {
+                reject();
+            }
+        })
+    });
+}
+
 var scan = function () {
     return new Promise((resolve, reject) => {
         wifi_native.wlanScan((status) => {
@@ -173,4 +185,4 @@ var disconnect = function (adapter) {
 
 }
 
-module.exports = { init, scan, connect, disconnect, free };
+module.exports = { init, scan, getNetworkList, connect, disconnect, free };

@@ -120,7 +120,7 @@ napi_value Scan(napi_env env, napi_callback_info info)
       {
         wprintf(L"WlanScan failed with error: %u\n", dwResult);
       }
-      DWORD waitResult = WaitForSingleObject(callbackInfo.handleEvent, 15000);
+      DWORD waitResult = WaitForSingleObject(callbackInfo.handleEvent, 5000);
       if (waitResult == WAIT_OBJECT_0)
       {
         if (callbackInfo.callbackReason == wlan_notification_acm_scan_complete)
