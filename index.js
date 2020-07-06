@@ -1,6 +1,9 @@
 var wifi_native = require('bindings')('wifi_native');
 var wifiControl = require("wifi-control");
 var fs = require("fs");
+var path = require("path");
+var { Worker } = require("worker_threads");
+let moduleDirname = path.dirname(module.filename);
 
 var win32WirelessProfileBuilder = function (ssid, security, key) {
     var profile_content;
@@ -70,32 +73,17 @@ var getNetworkList = function () {
 
 var scan = function () {
     return new Promise((resolve, reject) => {
-        wifi_native.wlanScan((status) => {
-            if (status == 1) {
-                wifi_native.wlanGetNetworkList((MediCamNetWorks) => {
-                    if (Array.isArray(MediCamNetWorks)) {
-                        for (let j = MediCamNetWorks.length - 1; j >= 0; j--) {
-                            for (let i = MediCamNetWorks.length - 1; i >= 0; i--) {
-                                if (MediCamNetWorks[i] && MediCamNetWorks[j]) {
-                                    if (MediCamNetWorks[j].ssid == MediCamNetWorks[i].ssid && i != j) {
-                                        if (MediCamNetWorks[j].rssi >= MediCamNetWorks[i].rssi) {
-                                            MediCamNetWorks.splice(i, 1);
-                                        } else {
-                                            MediCamNetWorks.splice(j, 1);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        resolve(MediCamNetWorks);
-                    }
-                    else
-                        reject(MediCamNetWorks);
-                })
-            } else {
-                reject("Scan Failed");
-            }
+        let scan_worker = new Worker(path.resolve(moduleDirname, "lib/scan_service.js"));
+        scan_worker.on("message", (result) => {
+            resolve(result);
         });
+        scan_worker.on("err", (err) => {
+            reject(err);
+        });
+        scan_worker.on('exit', (code) => {
+            if (code !== 0)
+                reject(new Error(`Worker stopped with exit code ${code}`));
+        })
     });
 };
 
@@ -121,9 +109,10 @@ var connect = function (_ap, adapter) {
         }
         profile = writeProfile(_ap);
         let profileContent = fs.readFileSync(profile, { encoding: 'utf8' });
-        let adapterName = adapter
-        wifi_native.wlanConnect(guid, profileContent, _ap.ssid, (result) => {
-            if (result == 1) {
+        let connect_worker = new Worker(path.resolve(moduleDirname, "lib/connect_service.js"), { workerData: { ap: _ap, GUID: guid, profileContent: profileContent } });
+        let adapterName = adapter;
+        connect_worker.on("message", (msg) => {
+            if (msg == "ok") {
                 fs.unlinkSync(profile);
                 let failedCount = 0;
                 let interval = setInterval(() => {
@@ -146,7 +135,7 @@ var connect = function (_ap, adapter) {
                 fs.unlinkSync(profile);
                 reject();
             }
-        });
+        })
     })
 }
 
