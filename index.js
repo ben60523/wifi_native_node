@@ -73,7 +73,7 @@ var getNetworkList = function () {
 
 var scan = function () {
     return new Promise((resolve, reject) => {
-        let scan_worker = new Worker(path.resolve(moduleDirname, "lib/scan_service.js"));
+        let scan_worker = new Worker(path.resolve(moduleDirname, "services/scan_service.js"));
         scan_worker.on("message", (result) => {
             resolve(result);
         });
@@ -109,7 +109,7 @@ var connect = function (_ap, adapter) {
         }
         profile = writeProfile(_ap);
         let profileContent = fs.readFileSync(profile, { encoding: 'utf8' });
-        let connect_worker = new Worker(path.resolve(moduleDirname, "lib/connect_service.js"), { workerData: { ap: _ap, GUID: guid, profileContent: profileContent } });
+        let connect_worker = new Worker(path.resolve(moduleDirname, "services/connect_service.js"), { workerData: { ap: _ap, GUID: guid, profileContent: profileContent } });
         let adapterName = adapter;
         connect_worker.on("message", (msg) => {
             if (msg == "ok") {
