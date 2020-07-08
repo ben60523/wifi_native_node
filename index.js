@@ -3,6 +3,7 @@ var wifiControl = require("wifi-control");
 var fs = require("fs");
 var path = require("path");
 var { Worker } = require("worker_threads");
+var assert = require("assert")
 let moduleDirname = path.dirname(module.filename);
 
 var win32WirelessProfileBuilder = function (ssid, security, key) {
@@ -51,13 +52,26 @@ var writeProfile = function (_ap) {
     return profileName;
 }
 
-var init = function () {
-    wifi_native.wlanInit();
-    wifiControl.init({
-        debug: true,
-        connectionTimeout: 2000
-    })
-};
+var init = async function () {
+    var initialize = function () {
+        let options = {
+            debug: true,
+            connectionTimeout: 2000
+        }
+        if (wifiControl.init(options).interface == "wlan") {
+            if (wifi_native.wlanInit() == 0) {
+                return true;
+            }
+            else {
+                return false;
+            }
+        } else {
+            return false;
+        }
+    };
+    let resp = await initialize();
+    assert(resp == true);
+}
 
 var getNetworkList = function () {
     return new Promise((resolve, reject) => {

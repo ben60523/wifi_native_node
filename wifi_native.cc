@@ -60,7 +60,7 @@ void wlanCallback(WLAN_NOTIFICATION_DATA *WlanNotificationData, PVOID myContext)
 
 napi_value WlanInit(napi_env env, napi_callback_info info)
 {
-  napi_status status;
+  napi_value result;
   DWORD dwResult = 0;
   DWORD dwMaxClient = 2;
   DWORD dwCurVersion = 0;
@@ -68,14 +68,19 @@ napi_value WlanInit(napi_env env, napi_callback_info info)
   if (dwResult != ERROR_SUCCESS)
   {
     wprintf(L"WlanOpenHandle failed with error: %u\n", dwResult);
+    napi_create_int32(env, 1, &result);
+    return result;
   }
   dwResult = WlanRegisterNotification(hClient, WLAN_NOTIFICATION_SOURCE_ALL, TRUE, (WLAN_NOTIFICATION_CALLBACK)wlanCallback, (PVOID)&callbackInfo, NULL, NULL);
   if (dwResult != ERROR_SUCCESS)
   {
     wprintf(L"WlanRegisterNotification failed with error: %u\n", dwResult);
+    napi_create_int32(env, 1, &result);
+    return result;
   }
   initflag = TRUE;
-  return nullptr;
+  napi_create_int32(env, 0, &result);
+  return result;
 }
 
 napi_value Scan(napi_env env, napi_callback_info info)
@@ -198,7 +203,7 @@ napi_value GetNetworkList(napi_env env, napi_callback_info info)
       if (WlanGetNetworkBssList(hClient, &pIfInfo->InterfaceGuid, pDotSSid, dot11_BSS_type_infrastructure, FALSE, NULL, &WlanBssList) == ERROR_SUCCESS)
       {
         printf("ok\n");
-        for (int c = 0; c < WlanBssList->dwNumberOfItems; c++)
+        for (unsigned int c = 0; c < WlanBssList->dwNumberOfItems; c++)
         {
           wprintf(L"ssid: %hs, rssi: %d\n", WlanBssList->wlanBssEntries[c].dot11Ssid.ucSSID, WlanBssList->wlanBssEntries[c].lRssi);
           if (strstr((char *)WlanBssList->wlanBssEntries[c].dot11Ssid.ucSSID, "MediCam_"))
