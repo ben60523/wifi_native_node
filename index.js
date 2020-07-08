@@ -58,19 +58,21 @@ var init = async function () {
             debug: true,
             connectionTimeout: 2000
         }
-        if (wifiControl.init(options).interface == "wlan") {
-            if (wifi_native.wlanInit() == 0) {
-                return true;
-            }
-            else {
+        return new Promise((resolve, reject) => {
+            if (wifiControl.init(options).interface == "wlan") {
+                if (wifi_native.wlanInit() == 0) {
+                    return true;
+                }
+                else {
+                    return false;
+                }
+            } else {
                 return false;
             }
-        } else {
-            return false;
-        }
+        });
     };
     let resp = await initialize();
-    assert(resp == true);
+    assert(resp == true, "Initialization failed");
 }
 
 var getNetworkList = function () {
