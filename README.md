@@ -31,13 +31,39 @@ wifi_native
                          # which is written by c
 ```
 
+## Packing project with electron-builder
+*  Starting worker thread from ASAR file is not support for now (ref: https://stackoverflow.com/questions/59630103/using-worker-thread-in-electron).
+   1. You have to let wifi_native unpacked by add `extraResources` and `asarUnpack` of `build` in package.json
+    ```json
+    {
+        "build": {
+            "extraResources": [
+                {
+                    "from": "./node_modules/wifi_native",
+                    "to": "./extra_res/module/wifi_native"
+                }
+            ]
+        }
+    }
+    
+    ```
+   2. Add `bindings` module in your project
+   3. Require `wifi_native` with the correct path in non-development environment
+
+
+    ```javascript
+        let isDev = "is_Development_Environment";
+        if (isDev) {
+            let wifiNative = require("wifi_native");
+        } else {
+            let wifiNative = require("../../../extra_res/module/wifi_native");
+        }
+    ```
+
 ## Methods
 ### `init()`
 * Call this method to initialize before any function in this project
-```javascript
-var wlanNative = require("../index");
-wlanNative.init();
-```
+
 ### `scan()`
 * Get ssid and signal intense of nearby APs
 ``` javascript
