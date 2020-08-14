@@ -261,18 +261,21 @@ napi_value GetInfo(napi_env env, napi_callback_info info)
     return uninit;
   }
   napi_status status;
-  napi_value argv[1];
-  napi_value result;
+  napi_value argv[1], args[1];
+  // napi_value result;
+  napi_value ifaceList;
   size_t argc = 1;
   PWLAN_INTERFACE_INFO_LIST plist = NULL;
   PWLAN_INTERFACE_INFO pInfo = NULL;
   PWLAN_CONNECTION_ATTRIBUTES pConnectInfo = NULL;
   WLAN_OPCODE_VALUE_TYPE opCode = wlan_opcode_value_type_invalid;
   DWORD connectInfoSize = sizeof(WLAN_CONNECTION_ATTRIBUTES);
-  status = napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+  status = napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
   assert(status == napi_ok);
   if (WlanEnumInterfaces(hClient, NULL, &plist) == ERROR_SUCCESS)
   {
+    status = napi_create_array(env, &ifaceList);
+    assert(status == napi_ok);
     for (int i = 0; i < (int)plist->dwNumberOfItems; i++)
     {
       napi_value iface, guid, description, connection;
@@ -282,7 +285,7 @@ napi_value GetInfo(napi_env env, napi_callback_info info)
       {
         _bstr_t b(GuidString);
         char *guidStr = b;
-        status = napi_create_string_utf8(env, guidStr, 39, &guid);
+        status = napi_create_string_utf8(env, guidStr, 38, &guid);
         assert(status == napi_ok);
         status = napi_create_object(env, &iface);
         assert(status == napi_ok);
@@ -291,42 +294,42 @@ napi_value GetInfo(napi_env env, napi_callback_info info)
       else
       {
         const char *error = "GetGuidtoStringFailed";
-        status = napi_create_string_utf8(env, error, 22, &result);
+        status = napi_create_string_utf8(env, error, 22, &ifaceList);
         goto end;
       }
       _bstr_t b_desc(pInfo->strInterfaceDescription);
-      status = napi_create_string_utf8(env, b_desc, 256, &description);
+      status = napi_create_string_utf8(env, b_desc, b_desc.length(), &description);
       assert(status == napi_ok);
       status = napi_set_named_property(env, iface, "description", description);
       assert(status == napi_ok);
       switch (pInfo->isState)
       {
       case wlan_interface_state_not_ready:
-        status = napi_create_string_utf8(env, "not ready", 10, &connection);
+        status = napi_create_string_utf8(env, "not ready", 9, &connection);
         break;
       case wlan_interface_state_connected:
-        status = napi_create_string_utf8(env, "connected", 10, &connection);
+        status = napi_create_string_utf8(env, "connected", 9, &connection);
         break;
       case wlan_interface_state_ad_hoc_network_formed:
-        status = napi_create_string_utf8(env, "ad_hoc", 7, &connection);
+        status = napi_create_string_utf8(env, "ad_hoc", 6, &connection);
         break;
       case wlan_interface_state_disconnecting:
-        status = napi_create_string_utf8(env, "disconnecting", 14, &connection);
+        status = napi_create_string_utf8(env, "disconnecting", 13, &connection);
         break;
       case wlan_interface_state_disconnected:
-        status = napi_create_string_utf8(env, "disconnected", 13, &connection);
+        status = napi_create_string_utf8(env, "disconnected", 12, &connection);
         break;
       case wlan_interface_state_associating:
-        status = napi_create_string_utf8(env, "connecting", 11, &connection);
+        status = napi_create_string_utf8(env, "connecting", 10, &connection);
         break;
       case wlan_interface_state_discovering:
-        status = napi_create_string_utf8(env, "discovering", 12, &connection);
+        status = napi_create_string_utf8(env, "discovering", 11, &connection);
         break;
       case wlan_interface_state_authenticating:
-        status = napi_create_string_utf8(env, "authenticating", 15, &connection);
+        status = napi_create_string_utf8(env, "authenticating", 14, &connection);
         break;
       default:
-        status = napi_create_string_utf8(env, "unknown", 8, &connection);
+        status = napi_create_string_utf8(env, "unknown", 7, &connection);
         break;
       }
       assert(status == napi_ok);
@@ -337,64 +340,108 @@ napi_value GetInfo(napi_env env, napi_callback_info info)
       {
         if (WlanQueryInterface(hClient, &pInfo->InterfaceGuid, wlan_intf_opcode_current_connection, NULL, &connectInfoSize, (PVOID *)&pConnectInfo, &opCode) == ERROR_SUCCESS)
         {
-          napi_value mode, profile_name;
+          napi_value mode, profile_name, ssid, phys_typ, phys_addr;
           switch (pConnectInfo->wlanConnectionMode)
           {
           case wlan_connection_mode_profile:
-            status = napi_create_string_utf8(env, "profile", 8, &mode);
+            status = napi_create_string_utf8(env, "profile", 7, &mode);
             break;
           case wlan_connection_mode_temporary_profile:
-            status = napi_create_string_utf8(env, "temporary_profile", 18, &mode);
+            status = napi_create_string_utf8(env, "temporary_profile", 17, &mode);
             break;
           case wlan_connection_mode_discovery_secure:
-            status = napi_create_string_utf8(env, "secure_discovery", 17, &mode);
+            status = napi_create_string_utf8(env, "secure_discovery", 16, &mode);
             break;
           case wlan_connection_mode_discovery_unsecure:
-            status = napi_create_string_utf8(env, "unsecure_discovery", 19, &mode);
+            status = napi_create_string_utf8(env, "unsecure_discovery", 18, &mode);
             break;
           case wlan_connection_mode_auto:
-            status = napi_create_string_utf8(env, "persistent_profile", 19, &mode);
+            status = napi_create_string_utf8(env, "persistent_profile", 18, &mode);
             break;
           case wlan_connection_mode_invalid:
-            status = napi_create_string_utf8(env, "invalid", 8, &mode);
+            status = napi_create_string_utf8(env, "invalid", 7, &mode);
             break;
           default:
-            status = napi_create_string_utf8(env, "unknown", 8, &mode);
+            status = napi_create_string_utf8(env, "unknown", 7, &mode);
             break;
           }
           assert(status == napi_ok);
           status = napi_set_named_property(env, iface, "mode", mode);
           assert(status == napi_ok);
           _bstr_t profileName(pConnectInfo->strProfileName);
-          status = napi_create_string_utf8(env, profileName, 256, &profile_name);
+          status = napi_create_string_utf8(env, profileName, profileName.length(), &profile_name);
           assert(status == napi_ok);
           status = napi_set_named_property(env, iface, "profile_name", profile_name);
           assert(status == napi_ok);
-          // TODO: get ssid, mac, phy_type, bssid_type, singal level... 
-          //       refer: https://docs.microsoft.com/en-us/windows/win32/api/wlanapi/nf-wlanapi-wlanqueryinterface 
-          
+          // TODO: get ssid, mac, phy_type, bssid_type, singal level...
+          //       refer: https://docs.microsoft.com/en-us/windows/win32/api/wlanapi/nf-wlanapi-wlanqueryinterface
+
+          // SSID
+          if (pConnectInfo->wlanAssociationAttributes.dot11Ssid.uSSIDLength != 0)
+          {
+            status = napi_create_string_utf8(env, (char *)pConnectInfo->wlanAssociationAttributes.dot11Ssid.ucSSID, (size_t)pConnectInfo->wlanAssociationAttributes.dot11Ssid.uSSIDLength, &ssid);
+            assert(status == napi_ok);
+            status = napi_set_named_property(env, iface, "ssid", ssid);
+            assert(status == napi_ok);
+          }
+
+          // physical type
+          switch (pConnectInfo->wlanAssociationAttributes.dot11BssType)
+          {
+          case dot11_BSS_type_infrastructure:
+            status = napi_create_string_utf8(env, "infrastructure", 14, &phys_typ);
+            break;
+          case dot11_BSS_type_independent:
+            status = napi_create_string_utf8(env, "independent", 11, &phys_typ);
+            break;
+          case dot11_BSS_type_any:
+            status = napi_create_string_utf8(env, "others", 6, &phys_typ);
+            break;
+          }
+          assert(status == napi_ok);
+          status = napi_set_named_property(env, iface, "bssid_type", phys_typ);
+          assert(status == napi_ok);
+
+          // MAC
+          char mac[17];
+          sprintf(mac, "%02x-%02x-%02x-%02x-%02x-%02x",
+                  pConnectInfo->wlanAssociationAttributes.dot11Bssid[0],
+                  pConnectInfo->wlanAssociationAttributes.dot11Bssid[1],
+                  pConnectInfo->wlanAssociationAttributes.dot11Bssid[2],
+                  pConnectInfo->wlanAssociationAttributes.dot11Bssid[3],
+                  pConnectInfo->wlanAssociationAttributes.dot11Bssid[4],
+                  pConnectInfo->wlanAssociationAttributes.dot11Bssid[5]);
+          status = napi_create_string_utf8(env, mac, 17, &phys_addr);
+          assert(status == napi_ok);
+          status = napi_set_named_property(env, iface, "MAC", phys_addr);
+          assert(status == napi_ok);
         }
         else
         {
           const char *error = "WlanQueryInterface failed";
-          napi_create_string_utf8(env, error, 26, &result);
+          napi_create_string_utf8(env, error, 25, &ifaceList);
           goto end;
         }
       }
+      status = napi_set_element(env, ifaceList, i, iface);
+      assert(status == napi_ok);
     }
   }
   else
   {
     const char *error = "WlanEnumInterfaces failed";
-    napi_create_string_utf8(env, error, 26, &result);
+    napi_create_string_utf8(env, error, 25, &ifaceList);
   }
 
 end:
-  napi_value cb = argv[0];
+  // argv[0] = ifaceList;
+  // napi_value cb = argv[0];
   napi_value global;
   status = napi_get_global(env, &global);
   assert(status == napi_ok);
-  napi_value result;
+  argv[0] = ifaceList;
+  napi_value result, cb;
+  cb = args[0];
   status = napi_call_function(env, global, cb, 1, argv, &result);
 }
 
@@ -675,12 +722,14 @@ napi_value Init(napi_env env, napi_value exports)
   napi_property_descriptor connectDesc = DECLARE_NAPI_METHOD("wlanConnect", Connect);
   napi_property_descriptor getList = DECLARE_NAPI_METHOD("wlanGetNetworkList", GetNetworkList);
   napi_property_descriptor disconnectDesc = DECLARE_NAPI_METHOD("wlanDisconnect", Disconnect);
+  napi_property_descriptor getIfaceListDesc = DECLARE_NAPI_METHOD("wlanGetIfaceInfo", GetInfo);
   status = napi_define_properties(env, exports, 1, &scanDesc);
   status = napi_define_properties(env, exports, 1, &initDesc);
   status = napi_define_properties(env, exports, 1, &freeDesc);
   status = napi_define_properties(env, exports, 1, &connectDesc);
   status = napi_define_properties(env, exports, 1, &getList);
   status = napi_define_properties(env, exports, 1, &disconnectDesc);
+  status = napi_define_properties(env, exports, 1, &getIfaceListDesc);
   assert(status == napi_ok);
   return exports;
 }

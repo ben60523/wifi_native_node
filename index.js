@@ -3,6 +3,7 @@ var fs = require("fs");
 var path = require("path");
 var { Worker } = require("worker_threads");
 var assert = require("assert");
+const { isArray } = require('util');
 let moduleDirname = path.join(__dirname, "services");// path.dirname(module.filename);
 
 var win32WirelessProfileBuilder = function (ssid, security, key) {
@@ -104,6 +105,19 @@ var getIfaceState = function () {
         }
     }
     return allinterface;
+}
+
+var getIfaceStateNative = function () {
+    return new Promise((resolve, reject) => {
+        wifi_native.wlanGetIfaceInfo((ifaceList) => {
+            // resolve(ifaceList);
+            if (isArray(ifaceList)) {
+                resolve(ifaceList);
+            } else {
+                reject(ifaceList);
+            }
+        })
+    });
 }
 
 var writeProfile = function (_ap) {
@@ -263,4 +277,4 @@ var disconnect = function (adapter) {
 
 }
 
-module.exports = { init, scan, getNetworkList, connect, disconnect, free };
+module.exports = { init, scan, getNetworkList, connect, disconnect, getIfaceStateNative, free };
