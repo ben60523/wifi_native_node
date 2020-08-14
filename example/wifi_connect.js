@@ -3,13 +3,13 @@ var wifi_native = require("../index");
 wifi_native.init();
 
 let ap = {
-    ssid: "MediCam_DFBAD1",
-    password: "1234567890"
+    ssid: "your_ap_ssid",
+    password: "your_ap_password"
 }
 setTimeout(() => {
     wifi_native.scan().then((res) => {
         console.log(res);
-        wifi_native.connect(ap, "Wi-Fi 5").then(() => {
+        wifi_native.connect(ap, "Wi-Fi 2").then(() => {
             console.log("connection success");
             wifi_native.free();
         }).catch(() => {
