@@ -413,7 +413,7 @@ napi_value GetInfo(napi_env env, napi_callback_info info)
                   pConnectInfo->wlanAssociationAttributes.dot11Bssid[5]);
           status = napi_create_string_utf8(env, mac, 17, &phys_addr);
           assert(status == napi_ok);
-          status = napi_set_named_property(env, iface, "MAC", phys_addr);
+          status = napi_set_named_property(env, iface, "AP_MAC", phys_addr);
           assert(status == napi_ok);
         }
         else
