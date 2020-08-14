@@ -128,5 +128,35 @@ wifiNative.getNetworkList()
         console.log("getting list failed");
     })
 ```
+### `getIfaceStateNative()`
+* get information of Wi-Fi interfaces
+```javascript
+wlanNative.getIfaceStateNative().then((ifaceList) => {
+    console.log("info", ifaceList);
+}).catch((e) => {
+    console.error("error", e);
+})
+```
+* output
+```javascript
+[
+  {
+    guid: '{DCF5C285-4B1F-419B-A0D0-8BCEC4D24E59}',
+    description: 'Edimax AC600 Wireless LAN USB Adapter',
+    connection: 'disconnected'
+  },
+  {
+    guid: '{DC94B46C-AE8C-4078-B15F-D55CD47AC640}',
+    description: 'Intel(R) Dual Band Wireless-AC 8260',
+    connection: 'connected',
+    mode: 'profile',
+    profile_name: 'UNICORNWORKING-5G',
+    ssid: 'UNICORNWORKING-5G',
+    bssid_type: 'infrastructure',
+    AP_MAC: 'b8-ec-a3-f7-fc-06'
+  }
+]
+```
+
 ### `free()`
 * Free memory if all the methods will not be used
