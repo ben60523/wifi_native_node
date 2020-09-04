@@ -4,7 +4,9 @@ var path = require("path");
 var { Worker } = require("worker_threads");
 var assert = require("assert");
 const { isArray } = require('util');
-let moduleDirname = path.join(__dirname, "services");// path.dirname(module.filename);
+let moduleDirname = path.join(__dirname, "services");
+var EventsEmitter = require("events").EventEmitter;
+// path.dirname(module.filename);
 
 var win32WirelessProfileBuilder = function (ssid, security, key) {
     var profile_content;
@@ -176,17 +178,46 @@ var getNetworkList = function () {
 
 var scan = function () {
     return new Promise((resolve, reject) => {
-        let scan_worker = new Worker(path.join(moduleDirname, "scan_service.js"));
-        scan_worker.on("message", (result) => {
-            resolve(result);
-        });
-        scan_worker.on("err", (err) => {
-            reject(err);
-        });
-        scan_worker.on('exit', (code) => {
-            if (code !== 0)
-                reject(new Error(`Worker stopped with exit code ${code}`));
+        wifi_native.wlanScan((flag) => {
+            if (flag == 0) {
+                console.log("good");
+                let event = new EventsEmitter();
+                let it = setInterval(() => {
+                    if (wifi_native.wlanListener(event.emit.bind(event)) == 0) {
+                        console.log("ok")
+                        wifi_native.wlanGetNetworkList((MediCamNetWorks) => {
+                            for (let j = MediCamNetWorks.length - 1; j >= 0; j--) {
+                                for (let i = MediCamNetWorks.length - 1; i >= 0; i--) {
+                                    if (MediCamNetWorks[i] && MediCamNetWorks[j]) {
+                                        if (MediCamNetWorks[j].ssid == MediCamNetWorks[i].ssid && i != j) {
+                                            if (MediCamNetWorks[j].rssi >= MediCamNetWorks[i].rssi) {
+                                                MediCamNetWorks.splice(i, 1);
+                                            } else {
+                                                MediCamNetWorks.splice(j, 1);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            resolve(MediCamNetWorks);
+                        })
+                        clearInterval(it)
+                    }
+                }, 2000)
+            } else
+                console.log("not good")
         })
+        // let scan_worker = new Worker(path.join(moduleDirname, "scan_service.js"));
+        // scan_worker.on("message", (result) => {
+        //     resolve(result);
+        // });
+        // scan_worker.on("err", (err) => {
+        //     reject(err);
+        // });
+        // scan_worker.on('exit', (code) => {
+        //     if (code !== 0)
+        //         reject(new Error(`Worker stopped with exit code ${code}`));
+        // })
     });
 };
 
@@ -212,33 +243,67 @@ var connect = function (_ap, adapter) {
         }
         profile = writeProfile(_ap);
         let profileContent = fs.readFileSync(profile, { encoding: 'utf8' });
-        let connect_worker = new Worker(path.join(moduleDirname, "connect_service.js"), { workerData: { ap: _ap, GUID: guid, profileContent: profileContent } });
-        let adapterName = adapter;
-        connect_worker.on("message", (msg) => {
-            if (msg == "ok") {
-                fs.unlinkSync(profile);
-                let failedCount = 0;
-                let interval = setInterval(() => {
-                    let ifStates = getIfaceState();
-                    let ifState = ifStates.find(interface => interface.adapterName === adapterName)
-                    if (ifState.connection === "connected" || ifState.connection === "disconnected") {
-                        if (failedCount > 20) {
-                            clearInterval(interval);
-                            reject();
-                        }
-                        if (ifState.ssid === _ap.ssid) {
-                            failedCount = 0;
-                            clearInterval(interval)
-                            resolve();
-                        }
-                        failedCount++;
+        // let connect_worker = new Worker(path.join(moduleDirname, "connect_service.js"), { workerData: { ap: _ap, GUID: guid, profileContent: profileContent } });
+        wifi_native.wlanConnect(guid, profileContent, _ap.ssid, (result) => {
+            if (result == 1) {
+                let event = new EventsEmitter();
+                let it = setInterval(() => {
+                    if (wifi_native.wlanListener(event.emit.bind(event)) == 1) {
+                        console.log("ok")
+                        let adapterName = adapter;
+                        fs.unlinkSync(profile);
+                        let failedCount = 0;
+                        let interval = setInterval(() => {
+                            let ifStates = getIfaceState();
+                            let ifState = ifStates.find(interface => interface.adapterName === adapterName)
+                            if (ifState.connection === "connected" || ifState.connection === "disconnected") {
+                                if (failedCount > 20) {
+                                    clearInterval(interval);
+                                    reject();
+                                }
+                                if (ifState.ssid === _ap.ssid) {
+                                    failedCount = 0;
+                                    clearInterval(interval)
+                                    resolve();
+                                }
+                                failedCount++;
+                            }
+                        }, 250)
+                        clearInterval(it)
+                    } else if (wifi_native.wlanListener(event.emit.bind(event)) == 2) {
+                        fs.unlinkSync(profile);
+                        reject();
+                        clearInterval(it)
                     }
-                }, 250)
-            } else {
-                fs.unlinkSync(profile);
-                reject();
+                }, 2000)
             }
         })
+        // let adapterName = adapter;
+        // connect_worker.on("message", (msg) => {
+        //     if (msg == "ok") {
+        //         fs.unlinkSync(profile);
+        //         let failedCount = 0;
+        //         let interval = setInterval(() => {
+        //             let ifStates = getIfaceState();
+        //             let ifState = ifStates.find(interface => interface.adapterName === adapterName)
+        //             if (ifState.connection === "connected" || ifState.connection === "disconnected") {
+        //                 if (failedCount > 20) {
+        //                     clearInterval(interval);
+        //                     reject();
+        //                 }
+        //                 if (ifState.ssid === _ap.ssid) {
+        //                     failedCount = 0;
+        //                     clearInterval(interval)
+        //                     resolve();
+        //                 }
+        //                 failedCount++;
+        //             }
+        //         }, 250)
+        //     } else {
+        //         fs.unlinkSync(profile);
+        //         reject();
+        //     }
+        // })
     })
 }
 
