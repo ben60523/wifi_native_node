@@ -11,9 +11,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <comdef.h>
-#include <thread>
-#include <future>
-#include <mutex>
 #include <string>
 
 #pragma comment(lib, "wlanapi.lib")
