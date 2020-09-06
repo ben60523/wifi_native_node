@@ -1,19 +1,13 @@
-var wifi_native = require('bindings')('wifi_native');
-var EventsEmitter = require("events").EventEmitter;
-let event = new EventsEmitter();
-console.log("start")
-event.on("scan_ok", () => {
-    console.log("ok~")
-})
+var wifiNative = require("../index");
+wifiNative.init();
 
-if (wifi_native.wlanInit() == 0) {
-    wifi_native.wlanScan((flag) => {
-        if (flag == 0) {
-            console.log("good");
-            wifi_native.wlanListener(event.emit.bind(event));
-        } else
-            console.log("not good")
+setTimeout(() => {
+    wifiNative.scan().then((list) => {
+        console.log(list);
+        wifiNative.free();
+    }).catch((e) => {
+        console.log("scan err: ", e);
+        wifiNative.free();
     })
-} else {
-    console.log("Rrrrr")
-}
+}, 1000)
+

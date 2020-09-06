@@ -181,9 +181,8 @@ var scan = function () {
         wifi_native.wlanScan((flag) => {
             if (flag == 0) {
                 console.log("good");
-                let event = new EventsEmitter();
                 let it = setInterval(() => {
-                    if (wifi_native.wlanListener(event.emit.bind(event)) == 0) {
+                    if (wifi_native.wlanListener() == 0) {
                         console.log("ok")
                         wifi_native.wlanGetNetworkList((MediCamNetWorks) => {
                             for (let j = MediCamNetWorks.length - 1; j >= 0; j--) {
