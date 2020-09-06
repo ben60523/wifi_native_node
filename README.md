@@ -54,7 +54,7 @@ wifi_native
             let wifiNative = require("../../../extra_res/module/wifi_native");
         }
     ```
-warning: **In Electronr after packing**: may couldn't find node.exe so it will cause error
+:warning: **In Electronr after packing**: may couldn't find node.exe so it will cause error
 
 ## Methods
 ### `init()`
