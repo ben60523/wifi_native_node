@@ -20,20 +20,15 @@ wifi_native
      |      |____ wifi_connect.js
      |      |____ wifi_disconnect.js
      |      |____ wifi_scan.js
-     |
-     |___ services # Long task, run with new thread
-     |      |____ connect_service.js
-     |      |____ scan_service.js
-     |
      |___ index.js # Module entry
      |___ binding.gyp # Binding info
      |___ wifi_native.cc # Library of the project
-                         # which is written by c
+                         # which is written by c/c++
 ```
 
-## Packing project with electron-builder
-*  Starting worker thread from ASAR file is not support for now (ref: https://stackoverflow.com/questions/59630103/using-worker-thread-in-electron).
-   1. You have to let wifi_native unpacked by add `extraResources` and `asarUnpack` of `build` in package.json
+## ~~Packing project with electron-builder~~
+*  ~~Starting worker thread from ASAR file is not support for now (ref: https://stackoverflow.com/questions/59630103/using-worker-thread-in-electron).~~
+   ~~1. You have to let wifi_native unpacked by add `extraResources` and `asarUnpack` of `build` in package.json~~
     ```json
     {
         "build": {
@@ -47,8 +42,8 @@ wifi_native
     }
     
     ```
-   2. Add `bindings` module in your project
-   3. Require `wifi_native` with the correct path in non-development environment
+   ~~2. Add `bindings` module in your project~~
+   ~~3. Require `wifi_native` with the correct path in non-development environment~~
 
 
     ```javascript
@@ -59,6 +54,7 @@ wifi_native
             let wifiNative = require("../../../extra_res/module/wifi_native");
         }
     ```
+warning: **In Electronr after packing**: may couldn't find node.exe so it will cause error
 
 ## Methods
 ### `init()`

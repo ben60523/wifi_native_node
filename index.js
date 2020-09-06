@@ -1,12 +1,5 @@
 var wifi_native = require('bindings')('wifi_native');
 var fs = require("fs");
-var path = require("path");
-var { Worker } = require("worker_threads");
-var assert = require("assert");
-const { isArray } = require('util');
-let moduleDirname = path.join(__dirname, "services");
-var EventsEmitter = require("events").EventEmitter;
-// path.dirname(module.filename);
 
 var win32WirelessProfileBuilder = function (ssid, security, key) {
     var profile_content;
@@ -38,9 +31,7 @@ var getIfaceState = function () {
         disconnected: "disconnected",
         associating: "connecting"
     }; l = 0
-    // interfaceState = {};
     connectionData = require("child_process").execSync("chcp 65001&netsh wlan show interface").toString("utf8");
-    // this.WiFiLog("connectionData:", connectionData);
     ref = connectionData.split('\n');
     var allinterface = []
     interfaceState = {}
@@ -112,12 +103,7 @@ var getIfaceState = function () {
 var getIfaceStateNative = function () {
     return new Promise((resolve, reject) => {
         wifi_native.wlanGetIfaceInfo((ifaceList) => {
-            // resolve(ifaceList);
-            if (isArray(ifaceList)) {
-                resolve(ifaceList);
-            } else {
-                reject(ifaceList);
-            }
+            resolve(ifaceList);
         })
     });
 }
@@ -147,10 +133,6 @@ var writeProfile = function (_ap) {
 
 var init = async function () {
     var initialize = function () {
-        let options = {
-            debug: true,
-            connectionTimeout: 2000
-        }
         return new Promise((resolve, reject) => {
             if (wifi_native.wlanInit() == 0) {
                 return true;
@@ -161,7 +143,6 @@ var init = async function () {
         });
     };
     let resp = await initialize();
-    assert(resp == true, "Initialization failed");
 }
 
 var getNetworkList = function () {
@@ -206,17 +187,6 @@ var scan = function () {
             } else
                 console.log("not good")
         })
-        // let scan_worker = new Worker(path.join(moduleDirname, "scan_service.js"));
-        // scan_worker.on("message", (result) => {
-        //     resolve(result);
-        // });
-        // scan_worker.on("err", (err) => {
-        //     reject(err);
-        // });
-        // scan_worker.on('exit', (code) => {
-        //     if (code !== 0)
-        //         reject(new Error(`Worker stopped with exit code ${code}`));
-        // })
     });
 };
 
@@ -242,12 +212,10 @@ var connect = function (_ap, adapter) {
         }
         profile = writeProfile(_ap);
         let profileContent = fs.readFileSync(profile, { encoding: 'utf8' });
-        // let connect_worker = new Worker(path.join(moduleDirname, "connect_service.js"), { workerData: { ap: _ap, GUID: guid, profileContent: profileContent } });
         wifi_native.wlanConnect(guid, profileContent, _ap.ssid, (result) => {
             if (result == 1) {
-                let event = new EventsEmitter();
                 let it = setInterval(() => {
-                    if (wifi_native.wlanListener(event.emit.bind(event)) == 1) {
+                    if (wifi_native.wlanListener() == 1) {
                         console.log("ok")
                         let adapterName = adapter;
                         fs.unlinkSync(profile);
@@ -269,7 +237,7 @@ var connect = function (_ap, adapter) {
                             }
                         }, 250)
                         clearInterval(it)
-                    } else if (wifi_native.wlanListener(event.emit.bind(event)) == 2) {
+                    } else if (wifi_native.wlanListener() == 2) {
                         fs.unlinkSync(profile);
                         reject();
                         clearInterval(it)
@@ -277,32 +245,6 @@ var connect = function (_ap, adapter) {
                 }, 2000)
             }
         })
-        // let adapterName = adapter;
-        // connect_worker.on("message", (msg) => {
-        //     if (msg == "ok") {
-        //         fs.unlinkSync(profile);
-        //         let failedCount = 0;
-        //         let interval = setInterval(() => {
-        //             let ifStates = getIfaceState();
-        //             let ifState = ifStates.find(interface => interface.adapterName === adapterName)
-        //             if (ifState.connection === "connected" || ifState.connection === "disconnected") {
-        //                 if (failedCount > 20) {
-        //                     clearInterval(interval);
-        //                     reject();
-        //                 }
-        //                 if (ifState.ssid === _ap.ssid) {
-        //                     failedCount = 0;
-        //                     clearInterval(interval)
-        //                     resolve();
-        //                 }
-        //                 failedCount++;
-        //             }
-        //         }, 250)
-        //     } else {
-        //         fs.unlinkSync(profile);
-        //         reject();
-        //     }
-        // })
     })
 }
 
