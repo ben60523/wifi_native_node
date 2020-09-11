@@ -162,28 +162,42 @@ var scan = function () {
         wifi_native.wlanScan((flag) => {
             if (flag == 0) {
                 console.log("good");
-                let it = setInterval(() => {
-                    if (wifi_native.wlanListener() == 0) {
-                        console.log("ok")
-                        wifi_native.wlanGetNetworkList((MediCamNetWorks) => {
-                            for (let j = MediCamNetWorks.length - 1; j >= 0; j--) {
-                                for (let i = MediCamNetWorks.length - 1; i >= 0; i--) {
-                                    if (MediCamNetWorks[i] && MediCamNetWorks[j]) {
-                                        if (MediCamNetWorks[j].ssid == MediCamNetWorks[i].ssid && i != j) {
-                                            if (MediCamNetWorks[j].rssi >= MediCamNetWorks[i].rssi) {
-                                                MediCamNetWorks.splice(i, 1);
-                                            } else {
-                                                MediCamNetWorks.splice(j, 1);
-                                            }
+                listenWiFiEvents(5000, 0).then(() => {
+                    console.log("ok")
+                    wifi_native.wlanGetNetworkList((MediCamNetWorks) => {
+                        for (let j = MediCamNetWorks.length - 1; j >= 0; j--) {
+                            for (let i = MediCamNetWorks.length - 1; i >= 0; i--) {
+                                if (MediCamNetWorks[i] && MediCamNetWorks[j]) {
+                                    if (MediCamNetWorks[j].ssid == MediCamNetWorks[i].ssid && i != j) {
+                                        if (MediCamNetWorks[j].rssi >= MediCamNetWorks[i].rssi) {
+                                            MediCamNetWorks.splice(i, 1);
+                                        } else {
+                                            MediCamNetWorks.splice(j, 1);
                                         }
                                     }
                                 }
                             }
-                            resolve(MediCamNetWorks);
-                        })
-                        clearInterval(it)
-                    }
-                }, 2000)
+                        }
+                        resolve(MediCamNetWorks);
+                    })
+                }).catch(() => {
+                    wifi_native.wlanGetNetworkList((MediCamNetWorks) => {
+                        for (let j = MediCamNetWorks.length - 1; j >= 0; j--) {
+                            for (let i = MediCamNetWorks.length - 1; i >= 0; i--) {
+                                if (MediCamNetWorks[i] && MediCamNetWorks[j]) {
+                                    if (MediCamNetWorks[j].ssid == MediCamNetWorks[i].ssid && i != j) {
+                                        if (MediCamNetWorks[j].rssi >= MediCamNetWorks[i].rssi) {
+                                            MediCamNetWorks.splice(i, 1);
+                                        } else {
+                                            MediCamNetWorks.splice(j, 1);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        resolve(MediCamNetWorks);
+                    })
+                })
             } else
                 console.log("not good")
         })
@@ -192,6 +206,26 @@ var scan = function () {
 
 var free = function () {
     wifi_native.wlanFree()
+}
+
+var listenWiFiEvents = function (timeout, code) {
+    let counter = timeout / 200;
+    return new Promise((resolve, reject) => {
+        let failedCount = 0;
+        let interval = setInterval(() => {
+            if (failedCount > counter) {
+                clearInterval(interval);
+                console.log("Cannot get expected callback event")
+                reject();
+            }
+            if (wifi_native.wlanListener() == code) {
+                clearInterval(interval);
+                resolve();
+            } else {
+                failedCount++;
+            }
+        }, 200)
+    });
 }
 
 var connect = function (_ap, adapter) {
@@ -214,35 +248,32 @@ var connect = function (_ap, adapter) {
         let profileContent = fs.readFileSync(profile, { encoding: 'utf8' });
         wifi_native.wlanConnect(guid, profileContent, _ap.ssid, (result) => {
             if (result == 1) {
-                let it = setInterval(() => {
-                    if (wifi_native.wlanListener() == 1) {
-                        console.log("ok")
-                        let adapterName = adapter;
-                        fs.unlinkSync(profile);
-                        let failedCount = 0;
-                        let interval = setInterval(() => {
-                            let ifStates = getIfaceState();
-                            let ifState = ifStates.find(interface => interface.adapterName === adapterName)
-                            if (ifState.connection === "connected" || ifState.connection === "disconnected") {
-                                if (failedCount > 20) {
-                                    clearInterval(interval);
-                                    reject();
-                                }
-                                if (ifState.ssid === _ap.ssid) {
-                                    failedCount = 0;
-                                    clearInterval(interval)
-                                    resolve();
-                                }
-                                failedCount++;
+                listenWiFiEvents(4000, 1).then(() => {
+                    let failedCount = 0
+                    let interval = setInterval(() => {
+                        let ifStates = getIfaceState();
+                        let ifState = ifStates.find(interface => interface.adapterName === adapter)
+                        if (ifState.connection === "connected" || ifState.connection === "disconnected") {
+                            if (failedCount > 20) {
+                                console.log("Failed: ")
+                                console.log(ifStates)
+                                clearInterval(interval);
+                                reject();
                             }
-                        }, 250)
-                        clearInterval(it)
-                    } else if (wifi_native.wlanListener() == 2) {
-                        fs.unlinkSync(profile);
-                        reject();
-                        clearInterval(it)
-                    }
-                }, 2000)
+                            if (ifState.ssid === _ap.ssid) {
+                                failedCount = 0;
+                                clearInterval(interval)
+                                resolve();
+                            }
+                            failedCount++;
+                        }
+                    }, 250)
+                }).catch(() => {
+                    reject();
+                })
+            }
+            else {
+                reject();
             }
         })
     })

@@ -142,7 +142,7 @@ Napi::Value Scan(Napi::CallbackInfo &info)
       pIfInfo = (WLAN_INTERFACE_INFO *)&pIfList->InterfaceInfo[ifaceNum];
       PWLAN_RAW_DATA WlanRawData = NULL;
       callbackInfo.interfaceGUID = pIfInfo->InterfaceGuid;
-      callbackInfo.handleEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+      callbackInfo.callbackReason = 8;
       printf("WlanScan... ");
       dwResult = WlanScan(hClient, &pIfInfo->InterfaceGuid, pDotSSid, WlanRawData, NULL);
       if (dwResult != ERROR_SUCCESS)
