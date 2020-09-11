@@ -162,7 +162,7 @@ var scan = function () {
         wifi_native.wlanScan((flag) => {
             if (flag == 0) {
                 console.log("good");
-                listenWiFiEvents(5000, 0).then(() => {
+                listenWiFiEvent(5000, 0).then(() => {
                     console.log("ok")
                     wifi_native.wlanGetNetworkList((MediCamNetWorks) => {
                         for (let j = MediCamNetWorks.length - 1; j >= 0; j--) {
@@ -198,8 +198,25 @@ var scan = function () {
                         resolve(MediCamNetWorks);
                     })
                 })
-            } else
+            } else {
                 console.log("not good")
+                wifi_native.wlanGetNetworkList((MediCamNetWorks) => {
+                    for (let j = MediCamNetWorks.length - 1; j >= 0; j--) {
+                        for (let i = MediCamNetWorks.length - 1; i >= 0; i--) {
+                            if (MediCamNetWorks[i] && MediCamNetWorks[j]) {
+                                if (MediCamNetWorks[j].ssid == MediCamNetWorks[i].ssid && i != j) {
+                                    if (MediCamNetWorks[j].rssi >= MediCamNetWorks[i].rssi) {
+                                        MediCamNetWorks.splice(i, 1);
+                                    } else {
+                                        MediCamNetWorks.splice(j, 1);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    resolve(MediCamNetWorks);
+                })
+            }
         })
     });
 };
@@ -208,17 +225,18 @@ var free = function () {
     wifi_native.wlanFree()
 }
 
-var listenWiFiEvents = function (timeout, code) {
+var listenWiFiEvent = function (timeout, EventCode) {
     let counter = timeout / 200;
     return new Promise((resolve, reject) => {
         let failedCount = 0;
         let interval = setInterval(() => {
+            let ret = wifi_native.wlanListener();
             if (failedCount > counter) {
                 clearInterval(interval);
-                console.log("Cannot get expected callback event")
+                console.log("Cannot get expected callback event", ret);
                 reject();
             }
-            if (wifi_native.wlanListener() == code) {
+            if (ret == EventCode) {
                 clearInterval(interval);
                 resolve();
             } else {
@@ -248,7 +266,7 @@ var connect = function (_ap, adapter) {
         let profileContent = fs.readFileSync(profile, { encoding: 'utf8' });
         wifi_native.wlanConnect(guid, profileContent, _ap.ssid, (result) => {
             if (result == 1) {
-                listenWiFiEvents(4000, 1).then(() => {
+                listenWiFiEvent(4000, 1).then(() => {
                     let failedCount = 0
                     let interval = setInterval(() => {
                         let ifStates = getIfaceState();

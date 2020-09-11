@@ -56,7 +56,7 @@ int listener()
   else
   {
     // others we don't really care
-    return 99;
+    return callbackInfo.callbackReason;
   }
 }
 
