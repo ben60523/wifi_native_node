@@ -25,27 +25,16 @@ var win32WirelessProfileBuilder = function (ssid, security, key) {
 };
 
 var getIfaceState = function () {
-    var KEY, VALUE, connectionData, error, error1, interfaceState, j, k, l, len, ln, ln_trim, parsedLine, ref, driver, name;
-    const connectionStateMap = {
-        connected: "connected",
-        disconnected: "disconnected",
-        associating: "connecting"
-    }; l = 0
+    var KEY, VALUE, connectionData, j, k, len, ln, ln_trim, parsedLine, ref;
     connectionData = require("child_process").execSync("chcp 65001&netsh wlan show interface").toString("utf8");
     ref = connectionData.split('\n');
-    var allinterface = []
-    interfaceState = {}
-    var adapterNumber = -1
+    var adapterName = "";
+    let ifaceList = getIfaceStateNative();
     for (k = j = 0, len = ref.length; j < len; k = ++j) {
         ln = ref[k];
         try {
             ln_trim = ln.trim();
             if (ln_trim === "Software Off") {
-                interfaceState = {
-                    ssid: null,
-                    connected: false,
-                    power: false
-                };
                 break;
             } else {
                 parsedLine = new RegExp(/([^:]+): (.+)/).exec(ln_trim);
@@ -56,56 +45,32 @@ var getIfaceState = function () {
             error = error1;
             continue;
         }
-        interfaceState.power = true;
-        switch (KEY) {
-            case "Name":
-                adapterNumber++
-                interfaceState.adapterName = VALUE
-                interfaceState.ssid = undefined
-                break;
-            case "State":
-                interfaceState.connection = connectionStateMap[VALUE]
-                break;
-            case "SSID":
-                interfaceState.ssid = VALUE
-                break;
-            case "Radio status":
-
-                if (VALUE === "Hardware Off") {
-                    interfaceState = {
-                        ssid: null,
-                        connected: false,
-                        power: false
-                    };
-                    break;
-                }
-            case "Description":
-                if (VALUE !== "Hardware On") {
-                    interfaceState.driver = VALUE
-                    if (VALUE.includes("USB")) {
-                        interfaceState.dongle = true
-                    } else {
-                        interfaceState.dongle = false
-                    }
-                }
-                break;
-            case "GUID":
-                interfaceState.guid = VALUE;
-                break;
+        if (VALUE.startsWith("Wi-Fi")) {
+            adapterName = VALUE;
         }
-        if (adapterNumber >= 0) {
-            allinterface[adapterNumber] = JSON.parse(JSON.stringify(interfaceState))
+        switch (KEY) {
+            case "GUID":
+                ifaceList.forEach(iface => {
+                    if (iface.guid.toLowerCase().includes(VALUE.toLowerCase())) {
+                        iface.adapterName = adapterName;
+                    }
+                });
+                break;
+            default:
+                break;
         }
     }
-    return allinterface;
+    // console.log(ifaceList);
+    return ifaceList;
+
 }
 
 var getIfaceStateNative = function () {
-    return new Promise((resolve, reject) => {
-        wifi_native.wlanGetIfaceInfo((ifaceList) => {
-            resolve(ifaceList);
-        })
-    });
+    let ifaceState;
+    wifi_native.wlanGetIfaceInfo((ifaceList) => {
+        ifaceState = ifaceList;
+    })
+    return ifaceState;
 }
 
 var writeProfile = function (_ap) {
@@ -253,7 +218,7 @@ var connect = function (_ap, adapter) {
         for (let ifaceNum = 0; ifaceNum < iface.length; ifaceNum++) {
             if (iface[ifaceNum].adapterName == adapter) {
                 guid = iface[ifaceNum].guid;
-                guid = "{" + guid + "}";
+                guid = guid;
                 break;
             }
         }
@@ -332,4 +297,4 @@ var disconnect = function (adapter) {
 
 }
 
-module.exports = { init, scan, getNetworkList, connect, disconnect, getIfaceStateNative, free };
+module.exports = { init, scan, getNetworkList, connect, disconnect, getIfaceStateNative, free, getIfaceState };
