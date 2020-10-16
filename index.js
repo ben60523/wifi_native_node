@@ -231,29 +231,26 @@ var connect = function (_ap, adapter) {
         let profileContent = fs.readFileSync(profile, { encoding: 'utf8' });
         wifi_native.wlanConnect(guid, profileContent, _ap.ssid, (result) => {
             if (result == 1) {
-                listenWiFiEvent(4000, 1).then(() => {
-                    let failedCount = 0
-                    let interval = setInterval(() => {
-                        let ifStates = getIfaceState();
-                        let ifState = ifStates.find(interface => interface.adapterName === adapter)
-                        if (ifState.connection === "connected" || ifState.connection === "disconnected") {
-                            if (failedCount > 20) {
-                                console.log("Failed: ")
-                                console.log(ifStates)
-                                clearInterval(interval);
-                                reject();
-                            }
-                            if (ifState.ssid === _ap.ssid) {
-                                failedCount = 0;
-                                clearInterval(interval)
-                                resolve();
-                            }
-                            failedCount++;
+                let failedCount = 0
+                let interval = setInterval(() => {
+                    let ifStates = getIfaceState();
+                    let ifState = ifStates.find(interface => interface.adapterName === adapter)
+                    if (ifState.connection === "connected" || ifState.connection === "disconnected") {
+                        if (failedCount > 20) {
+                            console.log("Failed: ")
+                            console.log(ifStates)
+                            clearInterval(interval);
+                            reject();
                         }
-                    }, 250)
-                }).catch(() => {
-                    reject();
-                })
+                        if (ifState.ssid === _ap.ssid) {
+                            failedCount = 0;
+                            clearInterval(interval)
+                            resolve();
+                        }
+                        failedCount++;
+                    }
+                }, 250)
+
             }
             else {
                 reject();
