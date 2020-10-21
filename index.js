@@ -269,7 +269,7 @@ var disconnect = function (adapter) {
             if (iface[ifaceNum].adapterName == adapter) {
                 if (iface[ifaceNum].connection == "connected") {
                     guid = iface[ifaceNum].guid;
-                    guid = "{" + guid + "}";
+                    // guid = "{" + guid + "}";
                     break;
                 } else {
                     console.log("This interface hasn't connect any AP")
