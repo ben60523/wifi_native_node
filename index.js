@@ -231,6 +231,7 @@ var connect = function (_ap, adapter) {
         let profileContent = fs.readFileSync(profile, { encoding: 'utf8' });
         wifi_native.wlanConnect(guid, profileContent, _ap.ssid, (result) => {
             if (result == 1) {
+                fs.unlinkSync(profile);
                 let failedCount = 0
                 let interval = setInterval(() => {
                     let ifStates = getIfaceState();
@@ -253,6 +254,7 @@ var connect = function (_ap, adapter) {
 
             }
             else {
+                fs.unlinkSync(profile);
                 reject();
             }
         })
