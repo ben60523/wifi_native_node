@@ -12,6 +12,10 @@
 #include <stdlib.h>
 #include <comdef.h>
 #include <string>
+#include <thread>
+#include <mutex>
+
+using namespace std;
 
 #pragma comment(lib, "wlanapi.lib")
 #pragma comment(lib, "ole32.lib")
@@ -26,6 +30,8 @@ typedef struct _WLAN_CALLBACK_INFO
 HANDLE hClient = NULL;
 WLAN_CALLBACK_INFO callbackInfo = {0};
 BOOL initflag = FALSE;
+mutex Scan_Lock;
+
 void free_memory(void *p)
 {
   if (p)
@@ -80,6 +86,7 @@ void wlanCallback(WLAN_NOTIFICATION_DATA *WlanNotificationData, PVOID myContext)
   if (WlanNotificationData->NotificationCode == wlan_notification_acm_scan_complete)
   {
     callbackInfo->callbackReason = WlanNotificationData->NotificationCode;
+    SetEvent(callbackInfo->handleEvent);
   }
   if ((WlanNotificationData->NotificationCode == wlan_notification_acm_connection_complete) ||
       (WlanNotificationData->NotificationCode == wlan_notification_acm_connection_attempt_fail))
@@ -115,14 +122,9 @@ napi_value WlanInit(const Napi::CallbackInfo &info)
   return result;
 }
 
-Napi::Value Scan(Napi::CallbackInfo &info)
+void ScanThread()
 {
-  Napi::Env env = info.Env();
-  if (!initflag)
-  {
-    return Napi::String::New(env, "You should call init() first");
-  }
-  Napi::Value scan_flag;
+  Scan_Lock.lock();
   DWORD dwResult = 0;
   PWLAN_INTERFACE_INFO pIfInfo = NULL;
   PWLAN_INTERFACE_INFO_LIST pIfList = NULL;
@@ -142,16 +144,25 @@ Napi::Value Scan(Napi::CallbackInfo &info)
       pIfInfo = (WLAN_INTERFACE_INFO *)&pIfList->InterfaceInfo[ifaceNum];
       PWLAN_RAW_DATA WlanRawData = NULL;
       callbackInfo.interfaceGUID = pIfInfo->InterfaceGuid;
-      callbackInfo.callbackReason = 8;
+      callbackInfo.handleEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+      // callbackInfo.callbackReason = 8;
       printf("WlanScan... ");
       dwResult = WlanScan(hClient, &pIfInfo->InterfaceGuid, pDotSSid, WlanRawData, NULL);
       if (dwResult != ERROR_SUCCESS)
       {
         wprintf(L"WlanScan failed with error: %u\n", dwResult);
       }
+      DWORD waitResult = WaitForSingleObject(callbackInfo.handleEvent, 5000);
+      if (waitResult == WAIT_OBJECT_0)
+      {
+        if (callbackInfo.callbackReason == wlan_notification_acm_scan_complete)
+        {
+          printf("ok\n");
+          // status = napi_create_int32(env, 1, &scan_flag);
+          // pIfInfo = (WLAN_INTERFACE_INFO *)&pIfList->InterfaceInfo[ifaceNum];
+        }
+      }
     }
-    Napi::Function cb = info[0].As<Napi::Function>();
-    cb.Call(env.Global(), {Napi::Number::New(env, 0)});
   }
   if (pIfList != NULL)
   {
@@ -163,11 +174,31 @@ Napi::Value Scan(Napi::CallbackInfo &info)
     WlanFreeMemory(pDotSSid);
     pDotSSid = NULL;
   }
+
+  CloseHandle(callbackInfo.handleEvent);
+  Scan_Lock.unlock();
+}
+
+Napi::Value Scan(const Napi::CallbackInfo &info)
+{
+  Napi::Env env = info.Env();
+  if (!initflag)
+  {
+    return Napi::String::New(env, "You should call init() first");
+  }
+
+  thread scan_thread(ScanThread);
+  scan_thread.detach();
+  // ScanThread();
+
+  Napi::Function cb = info[0].As<Napi::Function>();
+  cb.Call(env.Global(), {Napi::Number::New(env, 0)});
   return Napi::String::New(env, "scan");
 }
 
 Napi::Value GetNetworkList(const Napi::CallbackInfo &info)
 {
+  Scan_Lock.lock();
   Napi::Env env = info.Env();
 
   if (!initflag)
@@ -235,6 +266,7 @@ Napi::Value GetNetworkList(const Napi::CallbackInfo &info)
     WlanFreeMemory(WlanBssList);
     WlanBssList = NULL;
   }
+  Scan_Lock.unlock();
   return Napi::String::New(env, "getList");
 }
 

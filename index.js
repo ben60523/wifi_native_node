@@ -126,42 +126,23 @@ var scan = function () {
     return new Promise((resolve, reject) => {
         wifi_native.wlanScan((flag) => {
             if (flag == 0) {
-                console.log("good");
-                listenWiFiEvent(5000, 0).then(() => {
-                    console.log("ok")
-                    wifi_native.wlanGetNetworkList((MediCamNetWorks) => {
-                        for (let j = MediCamNetWorks.length - 1; j >= 0; j--) {
-                            for (let i = MediCamNetWorks.length - 1; i >= 0; i--) {
-                                if (MediCamNetWorks[i] && MediCamNetWorks[j]) {
-                                    if (MediCamNetWorks[j].ssid == MediCamNetWorks[i].ssid && i != j) {
-                                        if (MediCamNetWorks[j].rssi >= MediCamNetWorks[i].rssi) {
-                                            MediCamNetWorks.splice(i, 1);
-                                        } else {
-                                            MediCamNetWorks.splice(j, 1);
-                                        }
+                // console.log("good");
+                // console.log("ok")
+                wifi_native.wlanGetNetworkList((MediCamNetWorks) => {
+                    for (let j = MediCamNetWorks.length - 1; j >= 0; j--) {
+                        for (let i = MediCamNetWorks.length - 1; i >= 0; i--) {
+                            if (MediCamNetWorks[i] && MediCamNetWorks[j]) {
+                                if (MediCamNetWorks[j].ssid == MediCamNetWorks[i].ssid && i != j) {
+                                    if (MediCamNetWorks[j].rssi >= MediCamNetWorks[i].rssi) {
+                                        MediCamNetWorks.splice(i, 1);
+                                    } else {
+                                        MediCamNetWorks.splice(j, 1);
                                     }
                                 }
                             }
                         }
-                        resolve(MediCamNetWorks);
-                    })
-                }).catch(() => {
-                    wifi_native.wlanGetNetworkList((MediCamNetWorks) => {
-                        for (let j = MediCamNetWorks.length - 1; j >= 0; j--) {
-                            for (let i = MediCamNetWorks.length - 1; i >= 0; i--) {
-                                if (MediCamNetWorks[i] && MediCamNetWorks[j]) {
-                                    if (MediCamNetWorks[j].ssid == MediCamNetWorks[i].ssid && i != j) {
-                                        if (MediCamNetWorks[j].rssi >= MediCamNetWorks[i].rssi) {
-                                            MediCamNetWorks.splice(i, 1);
-                                        } else {
-                                            MediCamNetWorks.splice(j, 1);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        resolve(MediCamNetWorks);
-                    })
+                    }
+                    resolve(MediCamNetWorks);
                 })
             } else {
                 console.log("not good")
