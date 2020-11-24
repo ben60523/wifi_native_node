@@ -16,7 +16,8 @@
     "test_scan": "node example/wifi_scan.js",
     "test_connect": "node example/wifi_connect.js",
     "test_disconnect": "node example/wifi_disconnect.js",
-    "test_getInfo": "node example/wifi_getInfo.js"
+    "test_getInfo": "node example/wifi_getInfo.js",
+    "test_auto_scan": "node example/wifi_keep_scan.js"
   },
   "gypfile": true
 }

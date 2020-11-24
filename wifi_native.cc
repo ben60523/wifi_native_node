@@ -32,6 +32,9 @@ WLAN_CALLBACK_INFO callbackInfo = {0};
 BOOL initflag = FALSE;
 mutex Scan_Lock;
 
+/**
+ * ============== Internal Function ==============
+*/
 void free_memory(void *p)
 {
   if (p)
@@ -66,12 +69,6 @@ int listener()
   }
 }
 
-Napi::Value callEvents(const Napi::CallbackInfo &info)
-{
-  Napi::Env env = info.Env();
-  return Napi::Number::New(env, listener());
-}
-
 void wlanCallback(WLAN_NOTIFICATION_DATA *WlanNotificationData, PVOID myContext)
 {
   WLAN_CALLBACK_INFO *callbackInfo = (WLAN_CALLBACK_INFO *)myContext;
@@ -96,7 +93,84 @@ void wlanCallback(WLAN_NOTIFICATION_DATA *WlanNotificationData, PVOID myContext)
   return;
 }
 
-napi_value WlanInit(const Napi::CallbackInfo &info)
+void scan_func(BOOL sync)
+{
+  Scan_Lock.lock();
+  DWORD dwResult = 0;
+  PWLAN_INTERFACE_INFO pIfInfo = NULL;
+  PWLAN_INTERFACE_INFO_LIST pIfList = NULL;
+  PDOT11_SSID pDotSSid = NULL;
+
+  unsigned int ifaceNum = 0;
+  dwResult = WlanEnumInterfaces(hClient, NULL, &pIfList);
+  if (dwResult != ERROR_SUCCESS)
+  {
+    wprintf(L"WlanEnumInterfaces failed with error: %u\n", dwResult);
+  }
+  else
+  {
+    uint32_t correct_counter = 0;
+    for (ifaceNum = 0; ifaceNum < (int)pIfList->dwNumberOfItems; ifaceNum++)
+    {
+      pIfInfo = (WLAN_INTERFACE_INFO *)&pIfList->InterfaceInfo[ifaceNum];
+      PWLAN_RAW_DATA WlanRawData = NULL;
+      callbackInfo.interfaceGUID = pIfInfo->InterfaceGuid;
+      if (sync)
+      {
+        callbackInfo.handleEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+      }
+      else
+      {
+        callbackInfo.callbackReason = 8;
+      }
+
+      printf("WlanScan (%d)... ", ifaceNum);
+      dwResult = WlanScan(hClient, &pIfInfo->InterfaceGuid, pDotSSid, WlanRawData, NULL);
+      if (dwResult != ERROR_SUCCESS)
+      {
+        wprintf(L"WlanScan failed with error: %u\n", dwResult);
+      }
+      if (sync)
+      {
+        DWORD waitResult = WaitForSingleObject(callbackInfo.handleEvent, 5000);
+        if (waitResult == WAIT_OBJECT_0)
+        {
+          if (callbackInfo.callbackReason == wlan_notification_acm_scan_complete)
+          {
+            printf("ok\n");
+            // status = napi_create_int32(env, 1, &scan_flag);
+            // pIfInfo = (WLAN_INTERFACE_INFO *)&pIfList->InterfaceInfo[ifaceNum];
+          }
+        }
+      }
+    }
+  }
+  if (pIfList != NULL)
+  {
+    WlanFreeMemory(pIfList);
+    pIfList = NULL;
+  }
+  if (pDotSSid != NULL)
+  {
+    WlanFreeMemory(pDotSSid);
+    pDotSSid = NULL;
+  }
+  if (sync)
+  {
+    CloseHandle(callbackInfo.handleEvent);
+  }
+  Scan_Lock.unlock();
+}
+/**
+ * ========== These functions need to export ===========
+*/
+Napi::Value callEvents(const Napi::CallbackInfo &info)
+{
+  Napi::Env env = info.Env();
+  return Napi::Number::New(env, listener());
+}
+
+napi_value wlan_init(const Napi::CallbackInfo &info)
 {
   Napi::Env env = info.Env();
   napi_value result;
@@ -122,64 +196,30 @@ napi_value WlanInit(const Napi::CallbackInfo &info)
   return result;
 }
 
-void ScanThread()
+/**
+ * wlan_scan_async:
+ * In javascript is wlanScanAsyncWithThread(callback)
+ * do something in callback when scanning is done
+*/
+Napi::Value wlan_scan_async(const Napi::CallbackInfo &info)
 {
-  Scan_Lock.lock();
-  DWORD dwResult = 0;
-  PWLAN_INTERFACE_INFO pIfInfo = NULL;
-  PWLAN_INTERFACE_INFO_LIST pIfList = NULL;
-  PDOT11_SSID pDotSSid = NULL;
-
-  unsigned int ifaceNum = 0;
-  dwResult = WlanEnumInterfaces(hClient, NULL, &pIfList);
-  if (dwResult != ERROR_SUCCESS)
+  Napi::Env env = info.Env();
+  if (!initflag)
   {
-    wprintf(L"WlanEnumInterfaces failed with error: %u\n", dwResult);
+    return Napi::String::New(env, "You should call init() first");
   }
-  else
-  {
-    uint32_t correct_counter = 0;
-    for (ifaceNum = 0; ifaceNum < (int)pIfList->dwNumberOfItems; ifaceNum++)
-    {
-      pIfInfo = (WLAN_INTERFACE_INFO *)&pIfList->InterfaceInfo[ifaceNum];
-      PWLAN_RAW_DATA WlanRawData = NULL;
-      callbackInfo.interfaceGUID = pIfInfo->InterfaceGuid;
-      callbackInfo.handleEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
-      // callbackInfo.callbackReason = 8;
-      printf("WlanScan... ");
-      dwResult = WlanScan(hClient, &pIfInfo->InterfaceGuid, pDotSSid, WlanRawData, NULL);
-      if (dwResult != ERROR_SUCCESS)
-      {
-        wprintf(L"WlanScan failed with error: %u\n", dwResult);
-      }
-      DWORD waitResult = WaitForSingleObject(callbackInfo.handleEvent, 5000);
-      if (waitResult == WAIT_OBJECT_0)
-      {
-        if (callbackInfo.callbackReason == wlan_notification_acm_scan_complete)
-        {
-          printf("ok\n");
-          // status = napi_create_int32(env, 1, &scan_flag);
-          // pIfInfo = (WLAN_INTERFACE_INFO *)&pIfList->InterfaceInfo[ifaceNum];
-        }
-      }
-    }
-  }
-  if (pIfList != NULL)
-  {
-    WlanFreeMemory(pIfList);
-    pIfList = NULL;
-  }
-  if (pDotSSid != NULL)
-  {
-    WlanFreeMemory(pDotSSid);
-    pDotSSid = NULL;
-  }
-
-  CloseHandle(callbackInfo.handleEvent);
-  Scan_Lock.unlock();
+  scan_func(false);
+  Napi::Function cb = info[0].As<Napi::Function>();
+  cb.Call(env.Global(), {Napi::Number::New(env, 0)});
+  return Napi::String::New(env, "scan");
 }
 
-Napi::Value Scan(const Napi::CallbackInfo &info)
+/**
+ * wlan_scan_sync:
+ * In javascript is wlanScanSyncWithThread()
+ * This function is suggested  
+*/
+Napi::Value scan_thread_sync(const Napi::CallbackInfo &info)
 {
   Napi::Env env = info.Env();
   if (!initflag)
@@ -187,16 +227,13 @@ Napi::Value Scan(const Napi::CallbackInfo &info)
     return Napi::String::New(env, "You should call init() first");
   }
 
-  thread scan_thread(ScanThread);
+  thread scan_thread(scan_func, true);
   scan_thread.detach();
-  // ScanThread();
 
-  Napi::Function cb = info[0].As<Napi::Function>();
-  cb.Call(env.Global(), {Napi::Number::New(env, 0)});
   return Napi::String::New(env, "scan");
 }
 
-Napi::Value GetNetworkList(const Napi::CallbackInfo &info)
+Napi::Value get_network_list(const Napi::CallbackInfo &info)
 {
   Scan_Lock.lock();
   Napi::Env env = info.Env();
@@ -233,7 +270,7 @@ Napi::Value GetNetworkList(const Napi::CallbackInfo &info)
         printf("ok\n");
         for (unsigned int c = 0; c < WlanBssList->dwNumberOfItems; c++)
         {
-          wprintf(L"ssid: %hs, rssi: %d\n", WlanBssList->wlanBssEntries[c].dot11Ssid.ucSSID, WlanBssList->wlanBssEntries[c].lRssi);
+          // wprintf(L"ssid: %hs, rssi: %d\n", WlanBssList->wlanBssEntries[c].dot11Ssid.ucSSID, WlanBssList->wlanBssEntries[c].lRssi);
           if (strstr((char *)WlanBssList->wlanBssEntries[c].dot11Ssid.ucSSID, "MediCam_"))
           {
             napi_value ssid, rssi, scan_result;
@@ -270,7 +307,7 @@ Napi::Value GetNetworkList(const Napi::CallbackInfo &info)
   return Napi::String::New(env, "getList");
 }
 
-Napi::Value GetInfo(const Napi::CallbackInfo &info)
+Napi::Value wlan_get_info(const Napi::CallbackInfo &info)
 {
   Napi::Env env = info.Env();
 
@@ -448,7 +485,7 @@ end:
   return Napi::String::New(env, "get info");
 }
 
-Napi::Value Connect(const Napi::CallbackInfo &info)
+Napi::Value wlan_connect(const Napi::CallbackInfo &info)
 {
   Napi::Env env = info.Env();
 
@@ -566,7 +603,7 @@ end:
   return Napi::String::New(env, "connect");
 }
 
-Napi::Value Disconnect(const Napi::CallbackInfo &info)
+Napi::Value wlan_disconnect(const Napi::CallbackInfo &info)
 {
   Napi::Env env = info.Env();
 
@@ -611,7 +648,7 @@ Napi::Value Disconnect(const Napi::CallbackInfo &info)
   return Napi::String::New(env, "disconnect");
 }
 
-Napi::Value Wlanfree(const Napi::CallbackInfo &info)
+Napi::Value wlan_free(const Napi::CallbackInfo &info)
 {
   Napi::Env env = info.Env();
 
@@ -626,13 +663,14 @@ Napi::Value Wlanfree(const Napi::CallbackInfo &info)
 Napi::Object Init(Napi::Env env, Napi::Object exports)
 {
   exports.Set(Napi::String::New(env, "wlanListener"), Napi::Function::New(env, callEvents));
-  exports.Set(Napi::String::New(env, "wlanInit"), Napi::Function::New(env, WlanInit));
-  exports.Set(Napi::String::New(env, "wlanScan"), Napi::Function::New(env, Scan));
-  exports.Set(Napi::String::New(env, "wlanFree"), Napi::Function::New(env, Wlanfree));
-  exports.Set(Napi::String::New(env, "wlanConnect"), Napi::Function::New(env, Connect));
-  exports.Set(Napi::String::New(env, "wlanGetNetworkList"), Napi::Function::New(env, GetNetworkList));
-  exports.Set(Napi::String::New(env, "wlanDisconnect"), Napi::Function::New(env, Disconnect));
-  exports.Set(Napi::String::New(env, "wlanGetIfaceInfo"), Napi::Function::New(env, GetInfo));
+  exports.Set(Napi::String::New(env, "wlanInit"), Napi::Function::New(env, wlan_init));
+  exports.Set(Napi::String::New(env, "wlanScanAsyncWithThread"), Napi::Function::New(env, wlan_scan_async));
+  exports.Set(Napi::String::New(env, "wlanScanSyncWithThread"), Napi::Function::New(env, scan_thread_sync));
+  exports.Set(Napi::String::New(env, "wlanFree"), Napi::Function::New(env, wlan_free));
+  exports.Set(Napi::String::New(env, "wlanConnect"), Napi::Function::New(env, wlan_connect));
+  exports.Set(Napi::String::New(env, "wlanGetNetworkList"), Napi::Function::New(env, get_network_list));
+  exports.Set(Napi::String::New(env, "wlanDisconnect"), Napi::Function::New(env, wlan_disconnect));
+  exports.Set(Napi::String::New(env, "wlanGetIfaceInfo"), Napi::Function::New(env, wlan_get_info));
   return exports;
 }
 NODE_API_MODULE(NODE_GYP_MODULE_NAME, Init);
