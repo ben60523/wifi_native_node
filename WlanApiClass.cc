@@ -1,6 +1,8 @@
 #include "WlanApiClass.h"
 #include <wlanapi.h>
 #include <stdio.h>
+#include <thread>
+#include <functional>
 
 WlanApiClass::WlanApiClass()
 {
@@ -17,7 +19,7 @@ WlanApiClass::WlanApiClass()
     {
         wprintf(L"WlanRegisterNotification failed with error: %u\n", dwResult);
     }
-    initflag = TRUE;
+    // initflag = TRUE;
 }
 
 WlanApiClass::~WlanApiClass()
@@ -100,6 +102,11 @@ void WlanApiClass::scan(BOOL isSync)
 
 void WlanApiClass::scanSync()
 {
+    // scan is the member function of WlanApiClass, so you need to call it in new thread in compiler style.
+    // That is, func(&this, ..arg) in the constructor of thread.
+    // More Ref. https://stackoverflow.com/questions/10673585/start-thread-with-member-function
+    std::thread Scan_Thread(&scan, this, true);
+    Scan_Thread.detach();
 }
 
 void WlanApiClass::scanAsync(void *cb())
@@ -111,12 +118,123 @@ void WlanApiClass::scanAsync(void *cb())
     }
 }
 
-void WlanApiClass::connect()
+HRESULT WlanApiClass::connect(GUID guid_for_wlan, WCHAR *WProfile, char *ssid, ULONG ssidLen)
 {
+    // char GuidString[40] = {0};
+    // WCHAR GuidWString[40] = {0};
+    DWORD dwResult;
+    DWORD profileReasonCode;
+    WLAN_CONNECTION_PARAMETERS connectionParams;
+    // GUID guid_for_wlan;
+    char *profile = NULL;
+    char *ssid = NULL;
+    WCHAR *profileName = NULL;
+    // WCHAR *WProfile = NULL;
+    DOT11_SSID ap_ssid;
+
+    printf("Copy GUID... ");
+    size_t strSize = 40;
+    // std::string guid_arg = info[0].As<Napi::String>();
+    // strcpy(GuidString, guid_arg.c_str());
+    // // To wchar
+    // mbstowcs(GuidWString, GuidString, 40);
+    // // To GUID
+    // dwResult = CLSIDFromString(GuidWString, &guid_for_wlan);
+    // if (dwResult != NOERROR)
+    // {
+    //     wprintf(L"CLSIDFromString failed with error: %u\n", dwResult);
+    // }
+    // printf("ok\n");
+
+    // get profile content
+    // printf("Copy profile contents... ");
+    // std::string profile_arg = info[1].As<Napi::String>();
+    // size_t profileLen = profile_arg.length();
+    // profile = (char *)malloc(sizeof(char) * profileLen);
+    // strcpy(profile, profile_arg.c_str());
+    // WProfile = (WCHAR *)malloc(sizeof(WCHAR) * profileLen);
+    // mbstowcs(WProfile, profile, profileLen + 1);
+    // printf("ok\n");
+
+    // get filename of wi_fi profile for WlanSetProfile()
+    // printf("Copy profileName... ");
+    // std::string ssid_arg = info[2].As<Napi::String>();
+    // size_t ssidLen = ssid_arg.length();
+    // ssid = (char *)malloc(sizeof(char) * ssidLen);
+    // strcpy(ssid, ssid_arg.c_str());
+    // profileName = (WCHAR *)malloc(sizeof(WCHAR) * ssidLen);
+    // mbstowcs(profileName, ssid, ssidLen + 1);
+    // printf("ok\n");
+
+    // get ssid
+    printf("Copy ssid... ");
+    ap_ssid.uSSIDLength = (ULONG)ssidLen;
+    memcpy(ap_ssid.ucSSID, (UCHAR *)ssid, ssidLen);
+    printf("ok\n");
+
+    // set wlan connection parameters for WlanConnect()
+    printf("Set wlan_connection_params... ");
+    connectionParams.pDesiredBssidList = NULL;
+    connectionParams.strProfile = profileName;
+    connectionParams.dwFlags = 0;
+    connectionParams.dot11BssType = dot11_BSS_type_infrastructure;
+    connectionParams.wlanConnectionMode = wlan_connection_mode_profile;
+    connectionParams.pDot11Ssid = &ap_ssid;
+    printf("ok\n");
+
+    // set profile
+    printf("WlanSetProfile... ");
+    dwResult = WlanSetProfile(hClient, &guid_for_wlan, 0, WProfile, NULL, TRUE, NULL, &profileReasonCode);
+    if (dwResult != ERROR_SUCCESS)
+    {
+        wprintf(L"WlanSetProfile failed with error: %u\n", dwResult);
+        if (dwResult == ERROR_BAD_PROFILE)
+        {
+            WCHAR reasonStr[256];
+            dwResult = WlanReasonCodeToString(profileReasonCode, 256, reasonStr, NULL);
+            if (dwResult == ERROR_SUCCESS)
+            {
+                wprintf(L"why: %ls\n", reasonStr);
+            }
+        }
+    }
+    printf("ok\n");
+
+    //connect to ap
+    printf("wlanconnect... ");
+    callbackInfo.callbackReason = 8;
+    dwResult = WlanConnect(hClient, &guid_for_wlan, &connectionParams, NULL);
+    //FIXME: FREE MEMORY
+    printf("free memory...");
+    free_memory(profile);
+    // free_memory(WProfile);
+    // free_memory(ssid);
+    free_memory(profileName);
+    printf("ok\n");
+    if (dwResult != ERROR_SUCCESS)
+    {
+        printf("WlanConnect failed with error: %u\n", dwResult);
+        return S_FALSE;
+    }
+    else
+    {
+        return S_OK;
+    }
 }
 
-void WlanApiClass::disconnect()
+HRESULT WlanApiClass::disconnect(GUID guid_for_wlan)
 {
+    DWORD dwResult;
+    dwResult = WlanDisconnect(hClient, &guid_for_wlan, NULL);
+    if (dwResult == ERROR_SUCCESS)
+    {
+        return S_OK;
+    }
+    else
+    {
+        wprintf(L"WlanDisconnect failed with error: %u\n", dwResult);
+        return S_FALSE;
+    }
 }
 
 void WlanApiClass::get_network_list()
@@ -149,4 +267,13 @@ void wlanCallback(WLAN_NOTIFICATION_DATA *WlanNotificationData, PVOID myContext)
         callbackInfo->callbackReason = WlanNotificationData->NotificationCode;
     }
     return;
+}
+
+void free_memory(void *p)
+{
+    if (p)
+    {
+        free(p);
+        p = NULL;
+    }
 }
