@@ -2,7 +2,10 @@
   "targets": [
     {
       "target_name": "wifi_native",
-      "sources": [ "wifi_native.cc" ],
+      "sources": [
+        "src/WlanApiClass.cc",
+        "wifi_native.cc" 
+        ],
       "libraries": [
         "-ldbghelp.lib",
         "-lWS2_32.lib",
@@ -18,7 +21,8 @@
       ],
       "include_dirs": [
         "<!@(node -p \"require('node-addon-api').include\")",
-        "-L<$(HOMEPATH)AppData\\Local\\node-gyp\\Cache\\12.13.0\\include\\node"
+        "-L<$(HOMEPATH)AppData\\Local\\node-gyp\\Cache\\12.13.0\\include\\node",
+        "src"
       ],
       "defines": [
         "NAPI_DISABLE_CPP_EXCEPTIONS"

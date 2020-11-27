@@ -1,5 +1,6 @@
 var wifi_native = require('bindings')('wifi_native');
 var fs = require("fs");
+
 var scan_loop = null;
 
 var win32WirelessProfileBuilder = function (ssid, security, key) {
@@ -113,6 +114,7 @@ var init = async function () {
 
 var getNetworkList = function () {
     return new Promise((resolve, reject) => {
+        console.log("GetWlanApList")
         wifi_native.wlanGetNetworkList((MediCamNetWorks) => {
             if (MediCamNetWorks) {
                 for (let j = MediCamNetWorks.length - 1; j >= 0; j--) {
@@ -128,6 +130,7 @@ var getNetworkList = function () {
                         }
                     }
                 }
+                console.log(MediCamNetWorks);
                 resolve(MediCamNetWorks);
             } else {
                 reject();
@@ -136,12 +139,14 @@ var getNetworkList = function () {
     });
 }
 
-var scan_keep = function () {
-    if (!scan_loop) {
-        scan_loop = setInterval(() => {
-            wifi_native.wlanScanSyncWithThread();
-        }, 5000)
-    }
+var scanSync = function () {
+    return new Promise((resolve, reject) => {
+        wifi_native.wlanScanSync(() => {
+            getNetworkList().then((list) => {
+                resolve(list);
+            })
+        })
+    });
 }
 
 var kill_scan_keep = function () {
@@ -151,49 +156,16 @@ var kill_scan_keep = function () {
     }
 }
 
-var scan = function () {
+var scanAsync = function () {
     return new Promise((resolve, reject) => {
-        wifi_native.wlanScanAsyncWithThread((flag) => {
-            if (flag == 0) {
-                // console.log("good");
-                // console.log("ok")
-                listenWiFiEvent(5000, 0).then(() => {
-                    console.log("ok")
-                    wifi_native.wlanGetNetworkList((MediCamNetWorks) => {
-                        for (let j = MediCamNetWorks.length - 1; j >= 0; j--) {
-                            for (let i = MediCamNetWorks.length - 1; i >= 0; i--) {
-                                if (MediCamNetWorks[i] && MediCamNetWorks[j]) {
-                                    if (MediCamNetWorks[j].ssid == MediCamNetWorks[i].ssid && i != j) {
-                                        if (MediCamNetWorks[j].rssi >= MediCamNetWorks[i].rssi) {
-                                            MediCamNetWorks.splice(i, 1);
-                                        } else {
-                                            MediCamNetWorks.splice(j, 1);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        resolve(MediCamNetWorks);
+        wifi_native.wlanScanAsync((flag) => {
+            while (1) {
+                if (wifi_native.wlanCheckScanFinish()) {
+                    getNetworkList().then((list) => {
+                        resolve(list);
                     })
-                })
-            } else {
-                console.log("not good")
-                wifi_native.wlanGetNetworkList((MediCamNetWorks) => {
-                    for (let j = MediCamNetWorks.length - 1; j >= 0; j--) {
-                        for (let i = MediCamNetWorks.length - 1; i >= 0; i--) {
-                            if (MediCamNetWorks[i] && MediCamNetWorks[j]) {
-                                if (MediCamNetWorks[j].ssid == MediCamNetWorks[i].ssid && i != j) {
-                                    if (MediCamNetWorks[j].rssi >= MediCamNetWorks[i].rssi) {
-                                        MediCamNetWorks.splice(i, 1);
-                                    } else {
-                                        MediCamNetWorks.splice(j, 1);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    resolve(MediCamNetWorks);
-                })
+                    break;
+                }
             }
         })
     });
@@ -309,4 +281,4 @@ var disconnect = function (adapter) {
 
 }
 
-module.exports = { init, scan, getNetworkList, connect, disconnect, getIfaceStateNative, free, getIfaceState, scan_keep, kill_scan_keep };
+module.exports = { init, scanAsync, getNetworkList, connect, disconnect, getIfaceStateNative, free, getIfaceState, scanSync, kill_scan_keep };

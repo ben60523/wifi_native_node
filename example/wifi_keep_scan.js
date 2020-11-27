@@ -1,10 +1,9 @@
 var wifiNative = require("../index");
 wifiNative.init();
-
-wifiNative.scan_keep();
-
-setInterval(() => {
-    wifiNative.getNetworkList().then((MediCamNetWorks) => {
-        console.log(MediCamNetWorks);
-    })
-}, 7000)
+wifiNative.scanSync().then(() => {
+    console.log("Scan Complete");
+});
+console.log("Running...");
+process.on("exit", () => {
+    wifiNative.free();
+})
