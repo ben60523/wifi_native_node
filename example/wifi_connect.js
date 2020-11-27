@@ -9,7 +9,7 @@ let ap = {
 setTimeout(() => {
     wifi_native.scan().then((res) => {
         console.log(res);
-        wifi_native.connect(ap, "Wi-Fi 5").then(() => {
+        wifi_native.connect(ap, "Wi-Fi 2").then(() => {
             console.log("connection success");
             wifi_native.free();
         }).catch(() => {

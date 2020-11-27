@@ -4,7 +4,7 @@ wifi_native.init();
 
 
 setTimeout(() => {
-    wifi_native.disconnect("Wi-Fi").then(() => {
+    wifi_native.disconnect("Wi-Fi 2").then(() => {
         wifi_native.free();
         console.log("disconnected")
     }).catch(() => {

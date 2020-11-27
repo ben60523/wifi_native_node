@@ -14,50 +14,35 @@
 #include <string>
 #include <thread>
 #include <mutex>
+#include <future>
+#include "WlanApiClass.h"
 
 using namespace std;
 
 #pragma comment(lib, "wlanapi.lib")
 #pragma comment(lib, "ole32.lib")
 
-typedef struct _WLAN_CALLBACK_INFO
-{
-  GUID interfaceGUID;
-  HANDLE handleEvent;
-  DWORD callbackReason;
-} WLAN_CALLBACK_INFO;
-
-HANDLE hClient = NULL;
-WLAN_CALLBACK_INFO callbackInfo = {0};
 BOOL initflag = FALSE;
-mutex Scan_Lock;
-
+WlanApiClass wlanApi;
+BOOL background_scan_finished = FALSE;
 /**
  * ============== Internal Function ==============
 */
-void free_memory(void *p)
-{
-  if (p)
-  {
-    free(p);
-    p = NULL;
-  }
-}
 
 int listener()
 {
-  if (callbackInfo.callbackReason == wlan_notification_acm_scan_complete)
+  if (wlanApi.callbackInfo.callbackReason == wlan_notification_acm_scan_complete)
   {
     printf("ok scan\n");
     return 0;
   }
-  else if (callbackInfo.callbackReason == wlan_notification_acm_connection_complete)
+  else if (wlanApi.callbackInfo.callbackReason == wlan_notification_acm_connection_complete)
   {
     printf("ok connnect\n");
     wprintf(L"wlan_notification_acm_connection_complete\n");
     return 1;
   }
-  else if (callbackInfo.callbackReason == wlan_notification_acm_connection_attempt_fail)
+  else if (wlanApi.callbackInfo.callbackReason == wlan_notification_acm_connection_attempt_fail)
   {
     wprintf(L"wlan_notification_acm_connection_attempt_fail\n");
     return 2;
@@ -65,102 +50,10 @@ int listener()
   else
   {
     // others we don't really care
-    return callbackInfo.callbackReason;
+    return wlanApi.callbackInfo.callbackReason;
   }
 }
 
-void wlanCallback(WLAN_NOTIFICATION_DATA *WlanNotificationData, PVOID myContext)
-{
-  WLAN_CALLBACK_INFO *callbackInfo = (WLAN_CALLBACK_INFO *)myContext;
-  if (callbackInfo == nullptr)
-  {
-    return;
-  }
-  if (memcmp(&callbackInfo->interfaceGUID, &WlanNotificationData->InterfaceGuid, sizeof(GUID)) != 0)
-  {
-    return;
-  }
-  if (WlanNotificationData->NotificationCode == wlan_notification_acm_scan_complete)
-  {
-    callbackInfo->callbackReason = WlanNotificationData->NotificationCode;
-    SetEvent(callbackInfo->handleEvent);
-  }
-  if ((WlanNotificationData->NotificationCode == wlan_notification_acm_connection_complete) ||
-      (WlanNotificationData->NotificationCode == wlan_notification_acm_connection_attempt_fail))
-  {
-    callbackInfo->callbackReason = WlanNotificationData->NotificationCode;
-  }
-  return;
-}
-
-void scan_func(BOOL sync)
-{
-  Scan_Lock.lock();
-  DWORD dwResult = 0;
-  PWLAN_INTERFACE_INFO pIfInfo = NULL;
-  PWLAN_INTERFACE_INFO_LIST pIfList = NULL;
-  PDOT11_SSID pDotSSid = NULL;
-
-  unsigned int ifaceNum = 0;
-  dwResult = WlanEnumInterfaces(hClient, NULL, &pIfList);
-  if (dwResult != ERROR_SUCCESS)
-  {
-    wprintf(L"WlanEnumInterfaces failed with error: %u\n", dwResult);
-  }
-  else
-  {
-    uint32_t correct_counter = 0;
-    for (ifaceNum = 0; ifaceNum < (int)pIfList->dwNumberOfItems; ifaceNum++)
-    {
-      pIfInfo = (WLAN_INTERFACE_INFO *)&pIfList->InterfaceInfo[ifaceNum];
-      PWLAN_RAW_DATA WlanRawData = NULL;
-      callbackInfo.interfaceGUID = pIfInfo->InterfaceGuid;
-      if (sync)
-      {
-        callbackInfo.handleEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
-      }
-      else
-      {
-        callbackInfo.callbackReason = 8;
-      }
-
-      printf("WlanScan (%d)... ", ifaceNum);
-      dwResult = WlanScan(hClient, &pIfInfo->InterfaceGuid, pDotSSid, WlanRawData, NULL);
-      if (dwResult != ERROR_SUCCESS)
-      {
-        wprintf(L"WlanScan failed with error: %u\n", dwResult);
-      }
-      if (sync)
-      {
-        DWORD waitResult = WaitForSingleObject(callbackInfo.handleEvent, 5000);
-        if (waitResult == WAIT_OBJECT_0)
-        {
-          if (callbackInfo.callbackReason == wlan_notification_acm_scan_complete)
-          {
-            printf("ok\n");
-            // status = napi_create_int32(env, 1, &scan_flag);
-            // pIfInfo = (WLAN_INTERFACE_INFO *)&pIfList->InterfaceInfo[ifaceNum];
-          }
-        }
-      }
-    }
-  }
-  if (pIfList != NULL)
-  {
-    WlanFreeMemory(pIfList);
-    pIfList = NULL;
-  }
-  if (pDotSSid != NULL)
-  {
-    WlanFreeMemory(pDotSSid);
-    pDotSSid = NULL;
-  }
-  if (sync)
-  {
-    CloseHandle(callbackInfo.handleEvent);
-  }
-  Scan_Lock.unlock();
-}
 /**
  * ========== These functions need to export ===========
 */
@@ -174,33 +67,19 @@ napi_value wlan_init(const Napi::CallbackInfo &info)
 {
   Napi::Env env = info.Env();
   napi_value result;
-  DWORD dwResult = 0;
-  DWORD dwMaxClient = 2;
-  DWORD dwCurVersion = 0;
-  dwResult = WlanOpenHandle(dwMaxClient, NULL, &dwCurVersion, &hClient);
-  if (dwResult != ERROR_SUCCESS)
+  if (wlanApi.init() == S_OK)
   {
-    wprintf(L"WlanOpenHandle failed with error: %u\n", dwResult);
+    initflag = TRUE;
+    napi_create_int32(env, 0, &result);
+    return result;
+  }
+  else
+  {
     napi_create_int32(env, 1, &result);
     return result;
   }
-  dwResult = WlanRegisterNotification(hClient, WLAN_NOTIFICATION_SOURCE_ALL, TRUE, (WLAN_NOTIFICATION_CALLBACK)wlanCallback, (PVOID)&callbackInfo, NULL, NULL);
-  if (dwResult != ERROR_SUCCESS)
-  {
-    wprintf(L"WlanRegisterNotification failed with error: %u\n", dwResult);
-    napi_create_int32(env, 1, &result);
-    return result;
-  }
-  initflag = TRUE;
-  napi_create_int32(env, 0, &result);
-  return result;
 }
 
-/**
- * wlan_scan_async:
- * In javascript is wlanScanAsyncWithThread(callback)
- * do something in callback when scanning is done
-*/
 Napi::Value wlan_scan_async(const Napi::CallbackInfo &info)
 {
   Napi::Env env = info.Env();
@@ -208,34 +87,41 @@ Napi::Value wlan_scan_async(const Napi::CallbackInfo &info)
   {
     return Napi::String::New(env, "You should call init() first");
   }
-  scan_func(false);
-  Napi::Function cb = info[0].As<Napi::Function>();
-  cb.Call(env.Global(), {Napi::Number::New(env, 0)});
+  if (wlanApi.scanAsync() == S_OK)
+  {
+    Napi::Function cb = info[0].As<Napi::Function>();
+    cb.Call(env.Global(), {Napi::Number::New(env, 0)});
+  }
+  else
+  {
+    Napi::Function cb = info[0].As<Napi::Function>();
+    cb.Call(env.Global(), {Napi::Number::New(env, 1)});
+  }
   return Napi::String::New(env, "scan");
 }
 
-/**
- * wlan_scan_sync:
- * In javascript is wlanScanSyncWithThread()
- * This function is suggested  
-*/
-Napi::Value scan_thread_sync(const Napi::CallbackInfo &info)
+Napi::Value wlan_scan_sync(const Napi::CallbackInfo &info)
 {
   Napi::Env env = info.Env();
   if (!initflag)
   {
     return Napi::String::New(env, "You should call init() first");
   }
-
-  thread scan_thread(scan_func, true);
-  scan_thread.detach();
-
+  if (wlanApi.scanSync() == S_OK)
+  {
+    Napi::Function cb = info[0].As<Napi::Function>();
+    cb.Call(env.Global(), {Napi::Number::New(env, 0)});
+  }
+  else
+  {
+    Napi::Function cb = info[0].As<Napi::Function>();
+    cb.Call(env.Global(), {Napi::Number::New(env, 1)});
+  }
   return Napi::String::New(env, "scan");
 }
 
 Napi::Value get_network_list(const Napi::CallbackInfo &info)
 {
-  Scan_Lock.lock();
   Napi::Env env = info.Env();
 
   if (!initflag)
@@ -245,241 +131,65 @@ Napi::Value get_network_list(const Napi::CallbackInfo &info)
   napi_status status;
   napi_value scan_result_arr = NULL;
   status = napi_create_array(env, &scan_result_arr);
-  DWORD dwResult = 0;
-  PWLAN_BSS_LIST WlanBssList = NULL;
-  PWLAN_INTERFACE_INFO pIfInfo = NULL;
-  PWLAN_INTERFACE_INFO_LIST pIfList = NULL;
-  PDOT11_SSID pDotSSid = NULL;
 
-  unsigned int ifaceNum = 0;
-  dwResult = WlanEnumInterfaces(hClient, NULL, &pIfList);
-  if (dwResult != ERROR_SUCCESS)
-  {
-    wprintf(L"WlanEnumInterfaces failed with error: %u\n", dwResult);
-  }
-  else
-  {
-    uint32_t correct_counter = 0;
-    for (ifaceNum = 0; ifaceNum < (int)pIfList->dwNumberOfItems; ifaceNum++)
-    {
-      pIfInfo = (WLAN_INTERFACE_INFO *)&pIfList->InterfaceInfo[ifaceNum];
+  vector<SCAN_RESULT> scan_result_list = wlanApi.get_network_list();
+  vector<SCAN_RESULT>::iterator begin = scan_result_list.begin();
+  vector<SCAN_RESULT>::iterator end = scan_result_list.end();
+  vector<SCAN_RESULT>::iterator scan_result_it;
 
-      printf("WlanShowNetworksList... ");
-      if (WlanGetNetworkBssList(hClient, &pIfInfo->InterfaceGuid, pDotSSid, dot11_BSS_type_infrastructure, FALSE, NULL, &WlanBssList) == ERROR_SUCCESS)
-      {
-        printf("ok\n");
-        for (unsigned int c = 0; c < WlanBssList->dwNumberOfItems; c++)
-        {
-          // wprintf(L"ssid: %hs, rssi: %d\n", WlanBssList->wlanBssEntries[c].dot11Ssid.ucSSID, WlanBssList->wlanBssEntries[c].lRssi);
-          if (strstr((char *)WlanBssList->wlanBssEntries[c].dot11Ssid.ucSSID, "MediCam_"))
-          {
-            napi_value ssid, rssi, scan_result;
-            status = napi_create_object(env, &scan_result);
-            status = napi_create_string_utf8(env, (char *)WlanBssList->wlanBssEntries[c].dot11Ssid.ucSSID, (size_t)WlanBssList->wlanBssEntries[c].dot11Ssid.uSSIDLength, &ssid);
-            status = napi_create_int64(env, WlanBssList->wlanBssEntries[c].lRssi, &rssi);
-            status = napi_set_named_property(env, scan_result, "ssid", ssid);
-            status = napi_set_named_property(env, scan_result, "rssi", rssi);
-            status = napi_set_element(env, scan_result_arr, correct_counter, scan_result);
-            correct_counter++;
-          }
-        }
-      }
-    }
-    Napi::Function cb = info[0].As<Napi::Function>();
-    cb.Call(env.Global(), {scan_result_arr});
-  }
-  if (pIfList != NULL)
+  int nb_AP = 0;
+  for (scan_result_it = begin; scan_result_it != end; scan_result_it++)
   {
-    WlanFreeMemory(pIfList);
-    pIfList = NULL;
+    napi_value scan_result;
+    status = napi_create_object(env, &scan_result);
+    status = napi_set_named_property(env, scan_result, "ssid", Napi::String::New(env, scan_result_it->ssid));
+    status = napi_set_named_property(env, scan_result, "rssi", Napi::Number::New(env, scan_result_it->rssi));
+    status = napi_set_element(env, scan_result_arr, nb_AP, scan_result);
+    nb_AP++;
   }
-  if (pDotSSid != NULL)
-  {
-    WlanFreeMemory(pDotSSid);
-    pDotSSid = NULL;
-  }
-  if (WlanBssList != NULL)
-  {
-    WlanFreeMemory(WlanBssList);
-    WlanBssList = NULL;
-  }
-  Scan_Lock.unlock();
+
+  Napi::Function cb = info[0].As<Napi::Function>();
+  cb.Call(env.Global(), {scan_result_arr});
   return Napi::String::New(env, "getList");
 }
 
 Napi::Value wlan_get_info(const Napi::CallbackInfo &info)
 {
   Napi::Env env = info.Env();
-
   if (!initflag)
   {
     return Napi::String::New(env, "You should call init() first");
   }
+
   napi_status status;
   napi_value ifaceList;
-  PWLAN_INTERFACE_INFO_LIST plist = NULL;
-  PWLAN_INTERFACE_INFO pInfo = NULL;
-  PWLAN_CONNECTION_ATTRIBUTES pConnectInfo = NULL;
-  WLAN_OPCODE_VALUE_TYPE opCode = wlan_opcode_value_type_invalid;
-  DWORD connectInfoSize = sizeof(WLAN_CONNECTION_ATTRIBUTES);
-  if (WlanEnumInterfaces(hClient, NULL, &plist) == ERROR_SUCCESS)
-  {
-    status = napi_create_array(env, &ifaceList);
+  status = napi_create_array(env, &ifaceList);
 
-    for (int i = 0; i < (int)plist->dwNumberOfItems; i++)
+  vector<INTERFACE_INFO> interface_info_list = wlanApi.get_interface_info();
+  vector<INTERFACE_INFO>::iterator begin = interface_info_list.begin();
+  vector<INTERFACE_INFO>::iterator end = interface_info_list.end();
+  vector<INTERFACE_INFO>::iterator interface_info_it;
+
+  int nb_interface = 0;
+  for (interface_info_it = begin; interface_info_it != end; interface_info_it++)
+  {
+    napi_value ifaceInfo;
+    status = napi_create_object(env, &ifaceInfo);
+    status = napi_set_named_property(env, ifaceInfo, "guid", Napi::String::New(env, interface_info_it->guid));
+    status = napi_set_named_property(env, ifaceInfo, "description", Napi::String::New(env, interface_info_it->description));
+    status = napi_set_named_property(env, ifaceInfo, "connection", Napi::String::New(env, interface_info_it->connection));
+    if (interface_info_it->connection == "connected")
     {
-      napi_value iface, guid, description, connection;
-      pInfo = (WLAN_INTERFACE_INFO *)&plist->InterfaceInfo[i];
-      WCHAR GuidString[39] = {0};
-      if (StringFromGUID2(pInfo->InterfaceGuid, (LPOLESTR)&GuidString, sizeof(GuidString) / sizeof(*GuidString)) != 0)
-      {
-        _bstr_t b(GuidString);
-        char *guidStr = b;
-        status = napi_create_string_utf8(env, guidStr, 38, &guid);
-
-        status = napi_create_object(env, &iface);
-
-        status = napi_set_named_property(env, iface, "guid", guid);
-      }
-      else
-      {
-        const char *error = "GetGuidtoStringFailed";
-        status = napi_create_string_utf8(env, error, 22, &ifaceList);
-        goto end;
-      }
-      _bstr_t b_desc(pInfo->strInterfaceDescription);
-      status = napi_create_string_utf8(env, b_desc, b_desc.length(), &description);
-
-      status = napi_set_named_property(env, iface, "description", description);
-
-      switch (pInfo->isState)
-      {
-      case wlan_interface_state_not_ready:
-        status = napi_create_string_utf8(env, "not ready", 9, &connection);
-        break;
-      case wlan_interface_state_connected:
-        status = napi_create_string_utf8(env, "connected", 9, &connection);
-        break;
-      case wlan_interface_state_ad_hoc_network_formed:
-        status = napi_create_string_utf8(env, "ad_hoc", 6, &connection);
-        break;
-      case wlan_interface_state_disconnecting:
-        status = napi_create_string_utf8(env, "disconnecting", 13, &connection);
-        break;
-      case wlan_interface_state_disconnected:
-        status = napi_create_string_utf8(env, "disconnected", 12, &connection);
-        break;
-      case wlan_interface_state_associating:
-        status = napi_create_string_utf8(env, "connecting", 10, &connection);
-        break;
-      case wlan_interface_state_discovering:
-        status = napi_create_string_utf8(env, "discovering", 11, &connection);
-        break;
-      case wlan_interface_state_authenticating:
-        status = napi_create_string_utf8(env, "authenticating", 14, &connection);
-        break;
-      default:
-        status = napi_create_string_utf8(env, "unknown", 7, &connection);
-        break;
-      }
-
-      status = napi_set_named_property(env, iface, "connection", connection);
-
-      if (pInfo->isState == wlan_interface_state_connected)
-      {
-        if (WlanQueryInterface(hClient, &pInfo->InterfaceGuid, wlan_intf_opcode_current_connection, NULL, &connectInfoSize, (PVOID *)&pConnectInfo, &opCode) == ERROR_SUCCESS)
-        {
-          napi_value mode, profile_name, ssid, phys_typ, phys_addr;
-          switch (pConnectInfo->wlanConnectionMode)
-          {
-          case wlan_connection_mode_profile:
-            status = napi_create_string_utf8(env, "profile", 7, &mode);
-            break;
-          case wlan_connection_mode_temporary_profile:
-            status = napi_create_string_utf8(env, "temporary_profile", 17, &mode);
-            break;
-          case wlan_connection_mode_discovery_secure:
-            status = napi_create_string_utf8(env, "secure_discovery", 16, &mode);
-            break;
-          case wlan_connection_mode_discovery_unsecure:
-            status = napi_create_string_utf8(env, "unsecure_discovery", 18, &mode);
-            break;
-          case wlan_connection_mode_auto:
-            status = napi_create_string_utf8(env, "persistent_profile", 18, &mode);
-            break;
-          case wlan_connection_mode_invalid:
-            status = napi_create_string_utf8(env, "invalid", 7, &mode);
-            break;
-          default:
-            status = napi_create_string_utf8(env, "unknown", 7, &mode);
-            break;
-          }
-
-          status = napi_set_named_property(env, iface, "mode", mode);
-
-          _bstr_t profileName(pConnectInfo->strProfileName);
-          status = napi_create_string_utf8(env, profileName, profileName.length(), &profile_name);
-
-          status = napi_set_named_property(env, iface, "profile_name", profile_name);
-
-          // TODO: get ssid, mac, phy_type, bssid_type, singal level...
-          //       refer: https://docs.microsoft.com/en-us/windows/win32/api/wlanapi/nf-wlanapi-wlanqueryinterface
-
-          // SSID
-          if (pConnectInfo->wlanAssociationAttributes.dot11Ssid.uSSIDLength != 0)
-          {
-            status = napi_create_string_utf8(env, (char *)pConnectInfo->wlanAssociationAttributes.dot11Ssid.ucSSID, (size_t)pConnectInfo->wlanAssociationAttributes.dot11Ssid.uSSIDLength, &ssid);
-
-            status = napi_set_named_property(env, iface, "ssid", ssid);
-          }
-
-          // physical type
-          switch (pConnectInfo->wlanAssociationAttributes.dot11BssType)
-          {
-          case dot11_BSS_type_infrastructure:
-            status = napi_create_string_utf8(env, "infrastructure", 14, &phys_typ);
-            break;
-          case dot11_BSS_type_independent:
-            status = napi_create_string_utf8(env, "independent", 11, &phys_typ);
-            break;
-          case dot11_BSS_type_any:
-            status = napi_create_string_utf8(env, "others", 6, &phys_typ);
-            break;
-          }
-
-          status = napi_set_named_property(env, iface, "bssid_type", phys_typ);
-
-          // MAC
-          char mac[17];
-          sprintf(mac, "%02x-%02x-%02x-%02x-%02x-%02x",
-                  pConnectInfo->wlanAssociationAttributes.dot11Bssid[0],
-                  pConnectInfo->wlanAssociationAttributes.dot11Bssid[1],
-                  pConnectInfo->wlanAssociationAttributes.dot11Bssid[2],
-                  pConnectInfo->wlanAssociationAttributes.dot11Bssid[3],
-                  pConnectInfo->wlanAssociationAttributes.dot11Bssid[4],
-                  pConnectInfo->wlanAssociationAttributes.dot11Bssid[5]);
-          status = napi_create_string_utf8(env, mac, 17, &phys_addr);
-
-          status = napi_set_named_property(env, iface, "AP_MAC", phys_addr);
-        }
-        else
-        {
-          const char *error = "WlanQueryInterface failed";
-          napi_create_string_utf8(env, error, 25, &ifaceList);
-          goto end;
-        }
-      }
-      status = napi_set_element(env, ifaceList, i, iface);
+      status = napi_set_named_property(env, ifaceInfo, "mode", Napi::String::New(env, interface_info_it->mode));
+      status = napi_set_named_property(env, ifaceInfo, "profile_name", Napi::String::New(env, interface_info_it->profile_name));
+      status = napi_set_named_property(env, ifaceInfo, "ssid", Napi::String::New(env, interface_info_it->ssid));
+      status = napi_set_named_property(env, ifaceInfo, "bssid_type", Napi::String::New(env, interface_info_it->bssid_type));
+      status = napi_set_named_property(env, ifaceInfo, "AP_MAC", Napi::String::New(env, interface_info_it->AP_MAC));
     }
-  }
-  else
-  {
-    const char *error = "WlanEnumInterfaces failed";
-    napi_create_string_utf8(env, error, 25, &ifaceList);
-    goto end;
+    status = napi_set_element(env, ifaceList, nb_interface, ifaceInfo);
+    nb_interface++;
   }
 
-end:
   Napi::Function cb = info[0].As<Napi::Function>();
   cb.Call(env.Global(), {ifaceList});
   return Napi::String::New(env, "get info");
@@ -492,8 +202,6 @@ Napi::Value wlan_connect(const Napi::CallbackInfo &info)
   char GuidString[40] = {0};
   WCHAR GuidWString[40] = {0};
   DWORD dwResult;
-  DWORD profileReasonCode;
-  WLAN_CONNECTION_PARAMETERS connectionParams;
   GUID guid_for_wlan;
   char *profile = NULL;
   char *ssid = NULL;
@@ -503,7 +211,13 @@ Napi::Value wlan_connect(const Napi::CallbackInfo &info)
 
   if (!initflag)
   {
-    goto end;
+    printf("free memory...");
+    free_memory(profile);
+    free_memory(Wprofile);
+    free_memory(ssid);
+    free_memory(profileName);
+    printf("ok\n");
+    return Napi::String::New(env, "Un-initialization");
   }
   else
   {
@@ -547,59 +261,29 @@ Napi::Value wlan_connect(const Napi::CallbackInfo &info)
     memcpy(ap_ssid.ucSSID, (UCHAR *)ssid, ssidLen);
     printf("ok\n");
 
-    // set wlan connection parameters for WlanConnect()
-    printf("Set wlan_connection_params... ");
-    connectionParams.pDesiredBssidList = NULL;
-    connectionParams.strProfile = profileName;
-    connectionParams.dwFlags = 0;
-    connectionParams.dot11BssType = dot11_BSS_type_infrastructure;
-    connectionParams.wlanConnectionMode = wlan_connection_mode_profile;
-    connectionParams.pDot11Ssid = &ap_ssid;
-    printf("ok\n");
-
-    // set profile
-    printf("WlanSetProfile... ");
-    dwResult = WlanSetProfile(hClient, &guid_for_wlan, 0, Wprofile, NULL, TRUE, NULL, &profileReasonCode);
-    if (dwResult != ERROR_SUCCESS)
+    if (wlanApi.connect(guid_for_wlan, Wprofile, profileName, ssid, ssidLen) == S_OK)
     {
-      wprintf(L"WlanSetProfile failed with error: %u\n", dwResult);
-      if (dwResult == ERROR_BAD_PROFILE)
-      {
-        WCHAR reasonStr[256];
-        dwResult = WlanReasonCodeToString(profileReasonCode, 256, reasonStr, NULL);
-        if (dwResult == ERROR_SUCCESS)
-        {
-          wprintf(L"why: %ls\n", reasonStr);
-        }
-      }
-    }
-    printf("ok\n");
-
-    //connect to ap
-    printf("wlanconnect... ");
-    callbackInfo.callbackReason = 8;
-    dwResult = WlanConnect(hClient, &guid_for_wlan, &connectionParams, NULL);
-    if (dwResult != ERROR_SUCCESS)
-    {
-      wprintf(L"WlanConnect failed with error: %u\n", dwResult);
-      Napi::Function cb = info[3].As<Napi::Function>();
-      cb.Call(env.Global(), {Napi::Number::New(env, 0)});
-    }
-    else
-    {
+      printf("free memory...");
+      free_memory(profile);
+      free_memory(Wprofile);
+      free_memory(ssid);
+      free_memory(profileName);
+      printf("ok\n");
       Napi::Function cb = info[3].As<Napi::Function>();
       cb.Call(env.Global(), {Napi::Number::New(env, 1)});
     }
+    else
+    {
+      printf("free memory...");
+      free_memory(profile);
+      free_memory(Wprofile);
+      free_memory(ssid);
+      free_memory(profileName);
+      printf("ok\n");
+      Napi::Function cb = info[3].As<Napi::Function>();
+      cb.Call(env.Global(), {Napi::Number::New(env, 0)});
+    }
   }
-
-end:
-  //FIXME: FREE MEMORY
-  printf("free memory...");
-  free_memory(profile);
-  free_memory(Wprofile);
-  free_memory(ssid);
-  free_memory(profileName);
-  printf("ok\n");
   return Napi::String::New(env, "connect");
 }
 
@@ -633,8 +317,7 @@ Napi::Value wlan_disconnect(const Napi::CallbackInfo &info)
   printf("ok\n");
 
   // disconnect
-  dwResult = WlanDisconnect(hClient, &guid_for_wlan, NULL);
-  if (dwResult == ERROR_SUCCESS)
+  if (wlanApi.disconnect(guid_for_wlan) == S_OK)
   {
     Napi::Function cb = info[1].As<Napi::Function>();
     cb.Call(env.Global(), {Napi::Number::New(env, 1)});
@@ -651,26 +334,29 @@ Napi::Value wlan_disconnect(const Napi::CallbackInfo &info)
 Napi::Value wlan_free(const Napi::CallbackInfo &info)
 {
   Napi::Env env = info.Env();
-
-  if (hClient != NULL)
-  {
-    WlanCloseHandle(hClient, NULL);
-    hClient = NULL;
-  }
+  wlanApi.~WlanApiClass();
+  initflag = FALSE;
   return Napi::String::New(env, "free");
+}
+
+Napi::Value check_scan_finish(const Napi::CallbackInfo &info)
+{
+  Napi::Env env = info.Env();
+  return Napi::Boolean::New(env, wlanApi.scan_finish());
 }
 
 Napi::Object Init(Napi::Env env, Napi::Object exports)
 {
   exports.Set(Napi::String::New(env, "wlanListener"), Napi::Function::New(env, callEvents));
   exports.Set(Napi::String::New(env, "wlanInit"), Napi::Function::New(env, wlan_init));
-  exports.Set(Napi::String::New(env, "wlanScanAsyncWithThread"), Napi::Function::New(env, wlan_scan_async));
-  exports.Set(Napi::String::New(env, "wlanScanSyncWithThread"), Napi::Function::New(env, scan_thread_sync));
+  exports.Set(Napi::String::New(env, "wlanScanAsync"), Napi::Function::New(env, wlan_scan_async));
+  exports.Set(Napi::String::New(env, "wlanScanSync"), Napi::Function::New(env, wlan_scan_sync));
   exports.Set(Napi::String::New(env, "wlanFree"), Napi::Function::New(env, wlan_free));
   exports.Set(Napi::String::New(env, "wlanConnect"), Napi::Function::New(env, wlan_connect));
   exports.Set(Napi::String::New(env, "wlanGetNetworkList"), Napi::Function::New(env, get_network_list));
   exports.Set(Napi::String::New(env, "wlanDisconnect"), Napi::Function::New(env, wlan_disconnect));
   exports.Set(Napi::String::New(env, "wlanGetIfaceInfo"), Napi::Function::New(env, wlan_get_info));
+  exports.Set(Napi::String::New(env, "wlanCheckScanFinish"), Napi::Function::New(env, check_scan_finish));
   return exports;
 }
 NODE_API_MODULE(NODE_GYP_MODULE_NAME, Init);
