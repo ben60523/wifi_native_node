@@ -94,19 +94,17 @@ HRESULT WlanApiClass::scan(BOOL isSync)
             }
             if (isSync)
             {
-                DWORD waitResult = MsgWaitForMultipleObjects(1, &callbackInfo.handleEvent, 0, 10000, QS_ALLINPUT);
-                if (waitResult == WAIT_OBJECT_0 + 1)
+                DWORD waitResult = MsgWaitForMultipleObjects(1, &callbackInfo.handleEvent, 0, 10000, QS_ALLEVENTS);
+                if (waitResult == WAIT_OBJECT_0)
                 {
                     if (callbackInfo.callbackReason == wlan_notification_acm_scan_complete)
                     {
-                        // printf("ok\n");
-                        goto end;
+                        printf("...");
                     }
                 }
             }
         }
     }
-end:
     if (pIfList != NULL)
     {
         WlanFreeMemory(pIfList);
