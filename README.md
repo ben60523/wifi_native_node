@@ -16,73 +16,22 @@ node-gyp build
 
 ```ps
 wifi_native
-     |___ example # Example of the project
-     |      |____ wifi_connect.js
-     |      |____ wifi_disconnect.js
-     |      |____ wifi_scan.js
+     |
      |___ index.js # Module entry
      |___ binding.gyp # Binding info
-     |___ wifi_native.cc # Library of the project
-                         # which is written by c/c++
+     |___ wifi_native.cc # Interface between C/C++ and Javascript
+     |___ src # The baseclass 
+           |___ WlanClassApi.cc
+           |___ WlanClassApi.h 
 ```
-
-## ~~Packing project with electron-builder~~
-*  ~~Starting worker thread from ASAR file is not support for now (ref: https://stackoverflow.com/questions/59630103/using-worker-thread-in-electron).~~
-   ~~1. You have to let wifi_native unpacked by add `extraResources` and `asarUnpack` of `build` in package.json~~
-    ```json
-    {
-        "build": {
-            "extraResources": [
-                {
-                    "from": "./node_modules/wifi_native",
-                    "to": "./extra_res/module/wifi_native"
-                }
-            ]
-        }
-    }
-    
-    ```
-   ~~2. Add `bindings` module in your project~~
-   ~~3. Require `wifi_native` with the correct path in non-development environment~~
-
-
-    ```javascript
-        let isDev = "is_Development_Environment";
-        if (isDev) {
-            let wifiNative = require("wifi_native");
-        } else {
-            let wifiNative = require("../../../extra_res/module/wifi_native");
-        }
-    ```
-:warning: **In Electronr after packing**: may couldn't find node.exe so it will cause error
 
 ## Methods
 ### `init()`
 * Call this method to initialize before any function in this project
-
-### `scan()`
-* Get ssid and signal intense of nearby APs
-``` javascript
-    wlanNative.scan()
-        .then((results) => {
-        /*
-            result = [
-                {
-                    ssid: String
-                    rssi: Number
-                },
-                
-                .
-                .
-                .
-            ]
-        */
-        })
-        .catch((results) => {
-            console.log("scan failed");
-        })
-
-```
+### `scanAsync()`
+* Get ssid and signal intense of nearby APs. __Note that this api won't wait the response of Wi-Fi adapter__
+### `scanSync()`
+* Get ssid and signal intense of nearby APs. __Note that this api will wait the response of Wi-Fi adapter__
 ### `connect()`
 * To connect selected AP 
     * resolve if connect command is executed successfully
@@ -124,14 +73,10 @@ wifiNative.getNetworkList()
         console.log("getting list failed");
     })
 ```
-### `getIfaceStateNative()`
+### `getIfaceState()`
 * get information of Wi-Fi interfaces
 ```javascript
-wlanNative.getIfaceStateNative().then((ifaceList) => {
-    console.log("info", ifaceList);
-}).catch((e) => {
-    console.error("error", e);
-})
+let info = wlanNative.getIfaceStateNative()
 ```
 * output
 ```javascript
