@@ -194,6 +194,8 @@ HRESULT WlanApiClass::connect(GUID guid_for_wlan, WCHAR *WProfile, WCHAR *profil
     //connect to ap
     printf("wlanconnect... ");
     callbackInfo.callbackReason = 8;
+    callbackInfo.interfaceGUID = guid_for_wlan;
+    callbackInfo.handleEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
     dwResult = WlanConnect(hClient, &guid_for_wlan, &connectionParams, NULL);
     if (dwResult != ERROR_SUCCESS)
     {
@@ -202,7 +204,20 @@ HRESULT WlanApiClass::connect(GUID guid_for_wlan, WCHAR *WProfile, WCHAR *profil
     }
     else
     {
-        printf("ok\n");
+        DWORD waitConnectesult = MsgWaitForMultipleObjects(1, &callbackInfo.handleEvent, 0, 15000, QS_ALLEVENTS);
+        if (waitConnectesult == WAIT_OBJECT_0)
+        {
+            if (callbackInfo.callbackReason == wlan_notification_acm_connection_complete)
+            {
+                printf("ok\n");
+                wprintf(L"wlan_notification_acm_connection_complete\n");
+            }
+            else if (callbackInfo.callbackReason == wlan_notification_acm_connection_attempt_fail)
+            {
+                wprintf(L"wlan_notification_acm_connection_attempt_fail\n");
+            }
+        }
+        CloseHandle(callbackInfo.handleEvent);
         return S_OK;
     }
 }
@@ -446,6 +461,7 @@ void wlanCallback(WLAN_NOTIFICATION_DATA *WlanNotificationData, PVOID myContext)
         (WlanNotificationData->NotificationCode == wlan_notification_acm_connection_attempt_fail))
     {
         callbackInfo->callbackReason = WlanNotificationData->NotificationCode;
+        SetEvent(callbackInfo->handleEvent);
     }
     return;
 }

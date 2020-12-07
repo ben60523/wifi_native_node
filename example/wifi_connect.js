@@ -7,7 +7,7 @@ let ap = {
     password: "1234567890"
 }
 setTimeout(() => {
-    wifi_native.scan().then((res) => {
+    wifi_native.scanSync().then((res) => {
         console.log(res);
         wifi_native.connect(ap, "Wi-Fi 2").then(() => {
             console.log("connection success");
