@@ -1,13 +1,28 @@
 var wifiNative = require("../index");
-wifiNative.init();
+var os = require("os");
 
-setTimeout(() => {
-    wifiNative.scanAsync().then((list) => {
+if (os.platform() === "win32") {
+  wifiNative.init();
+
+  setTimeout(() => {
+    wifiNative
+      .scanAsync()
+      .then((list) => {
         // console.log(list);
         wifiNative.free();
-    }).catch((e) => {
+      })
+      .catch((e) => {
         console.log("scan err: ", e);
         wifiNative.free();
+      });
+  }, 1000);
+} else if (os.platform() === "darwin") {
+  wifiNative
+    .scanDarwin()
+    .then((list) => {
+      console.log(list);
     })
-}, 1000)
-
+    .catch((e) => {
+      console.log(e);
+    });
+}

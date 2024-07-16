@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <napi.h>
 #include <objc/objc.h>
+#include <string>
 #include <vector>
 
 using namespace Napi;
@@ -92,21 +93,28 @@ private:
     if (!wifiInterface) {
       NSLog(@"No Wi-Fi interface found");
     }
+
+    NSLog(@"Ineterface %@ is found", [wifiInterface interfaceName]);
     NSError *err = nil;
     NSString *ns_ssid = [NSString stringWithUTF8String:ssid];
     NSString *ns_pass = [NSString stringWithUTF8String:password];
 
+    bool apFound = false;
     for (CWNetwork *network in [wifiInterface cachedScanResults]) {
       if ([network ssid] && [[network ssid] isEqualToString:ns_ssid]) {
+        apFound = true;
         res = [wifiInterface associateToNetwork:network
                                        password:ns_pass
-                                          error:&err];
+                                            error:&err];
         if (!res) {
           const char *msg = [[err localizedDescription] UTF8String];
           NSLog(@"Connecting error %s", msg);
         }
         break;
       }
+    }
+    if (!apFound) {
+      NSLog(@"%s is not found", ssid);
     }
   }
 };
@@ -119,8 +127,10 @@ Value scan(const CallbackInfo &info) {
 }
 
 Value connect(const CallbackInfo &info) {
-  const char *ssid = info[0].As<String>().Utf8Value().c_str();
-  const char *pass = info[1].As<String>().Utf8Value().c_str();
+  std::string ssid_str = info[0].As<Napi::String>();
+  std::string pass_str = info[1].As<Napi::String>();
+  const char *ssid = ssid_str.c_str();;
+  const char *pass = pass_str.c_str();
   Function cb = info[2].As<Function>();
   WifiConnectWorker *worker = new WifiConnectWorker(ssid, pass, cb);
   worker->Queue();

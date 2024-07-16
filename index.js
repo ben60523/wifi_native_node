@@ -1,5 +1,6 @@
 var wifi_native = require("bindings")("wifi_native");
 var fs = require("fs");
+var os = require("os");
 
 var scan_loop = null;
 
@@ -241,7 +242,7 @@ var connect = function (_ap, adapter) {
         let interval = setInterval(() => {
           let ifStates = getIfaceState();
           let ifState = ifStates.find(
-            (interface) => interface.adapterName === adapter,
+            (interface) => interface.adapterName === adapter
           );
           if (
             ifState.connection === "connected" ||
@@ -303,15 +304,46 @@ var disconnect = function (adapter) {
   });
 };
 
-module.exports = {
-  init,
-  scanAsync,
-  getNetworkList,
-  connect,
-  disconnect,
-  getIfaceStateNative,
-  free,
-  getIfaceState,
-  scanSync,
-  kill_scan_keep,
+var scanDarwin = () => {
+  return new Promise((resolve, reject) => {
+    wifi_native.scan((list) => {
+      if (list !== null && list.length > 0) {
+        resolve(list);
+      } else {
+        reject("scan failed. please check location permission");
+      }
+    });
+  });
 };
+
+var connectDarwin = (ssid, password) => {
+  return new Promise((resolve, reject) => {
+    wifi_native.connect(ssid, password, (res) => {
+      if (res) {
+        resolve();
+      } else {
+        reject();
+      }
+    });
+  });
+};
+
+if (os.platform() === "win32") {
+  module.exports = {
+    init,
+    scanAsync,
+    getNetworkList,
+    connect,
+    disconnect,
+    getIfaceStateNative,
+    free,
+    getIfaceState,
+    scanSync,
+    kill_scan_keep,
+  };
+} else if (os.platform() === "darwin") {
+  module.exports = {
+    scanDarwin,
+    connectDarwin,
+  };
+}
