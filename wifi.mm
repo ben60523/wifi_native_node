@@ -1,9 +1,13 @@
 #include <CoreWLAN/CoreWLAN.h>
+#import <CoreLocation/CoreLocation.h>
+#include <functional>
+#include <objc/NSObject.h>
 #include <Foundation/Foundation.h>
-#include <MacTypes.h>
-#include <cstddef>
+#include <cstring>
 #include <napi.h>
-#include <objc/objc.h>
+#include <netinet/in.h>
+#include <ifaddrs.h>
+#include <netdb.h>
 #include <string>
 #include <vector>
 
@@ -126,7 +130,7 @@ Value scan(const CallbackInfo &info) {
   return info.Env().Undefined();
 }
 
-Value connect(const CallbackInfo &info) {
+Value connectAp(const CallbackInfo &info) {
   std::string ssid_str = info[0].As<Napi::String>();
   std::string pass_str = info[1].As<Napi::String>();
   const char *ssid = ssid_str.c_str();;
@@ -137,10 +141,59 @@ Value connect(const CallbackInfo &info) {
   return info.Env().Undefined();
 }
 
+Value getWifiStatus(const CallbackInfo &info) {
+  Env env = info.Env();
+  CWWiFiClient *wifiClient = [CWWiFiClient sharedWiFiClient];
+  NSArray<CWInterface *> *interfaces = [wifiClient interfaces];
+  Array res = Array::New(env);
+  int count = 0;
+  for (CWInterface *interface in interfaces) {
+    Napi::Object obj = Napi::Object::New(env);
+    const char *ssid = [[interface ssid] UTF8String];
+    const char *bssid = [[interface bssid] UTF8String];
+    bool isOn = [interface powerOn];
+    const char *name = [[interface interfaceName] UTF8String];
+    struct ifaddrs *ifa, *ifaddr;
+    char host[NI_MAXHOST];
+    if (getifaddrs(&ifaddr) == -1) {
+      NSLog(@"Error getting ip address");
+      obj.Set(Napi::String::New(env, "ip"), Napi::String::New(env, ""));
+    }
+
+    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+      if (ifa->ifa_addr == NULL) {
+        continue;
+      }
+      int family = ifa->ifa_addr->sa_family;
+      if (family == AF_INET || family == AF_INET6) {
+        if (strcmp(ifa->ifa_name, name) == 0) {
+          size_t sockaddr_in = (family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+          int s = getnameinfo(ifa->ifa_addr, sockaddr_in, host, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
+          if (s != 0) {
+            NSLog(@"getnameinfo() failed: %s", gai_strerror(s));
+            obj.Set(Napi::String::New(env, "ip"), Napi::String::New(env, ""));
+          }
+          if (family == AF_INET) {
+            obj.Set(Napi::String::New(env, "ip"), Napi::String::New(env, host));
+          }
+        }
+      }
+    }
+    freeifaddrs(ifaddr);
+    obj.Set(Napi::String::New(env, "ssid"), Napi::String::New(env, ssid ?: ""));
+    obj.Set(Napi::String::New(env, "bssid"), Napi::String::New(env, bssid ?: ""));
+    obj.Set(Napi::String::New(env, "isOn"), Napi::Boolean::New(env, isOn));
+    obj.Set(Napi::String::New(env, "name"), Napi::String::New(env, name));
+    res.Set(count, obj);
+    count ++;
+  }
+  return res;
+}
+
 Object Init(Env env, Object exports) {
   exports.Set(Napi::String::New(env, "scan"), Napi::Function::New(env, scan));
-  exports.Set(Napi::String::New(env, "connect"),
-              Napi::Function::New(env, connect));
+  exports.Set(Napi::String::New(env, "connect"), Napi::Function::New(env, connectAp));
+  exports.Set(Napi::String::New(env, "getWifiStatus"), Napi::Function::New(env, getWifiStatus));
   return exports;
 }
 

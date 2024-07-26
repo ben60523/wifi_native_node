@@ -328,6 +328,10 @@ var connectDarwin = (ssid, password) => {
   });
 };
 
+var getWifiStatus = () => {
+  return wifi_native.getWifiStatus();
+}
+
 if (os.platform() === "win32") {
   module.exports = {
     init,
@@ -345,5 +349,6 @@ if (os.platform() === "win32") {
   module.exports = {
     scanDarwin,
     connectDarwin,
+    getWifiStatus,
   };
 }
