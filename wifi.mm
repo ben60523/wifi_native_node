@@ -59,12 +59,12 @@ private:
     NSLog(@"Scanning is over, ready to output the list[%zd]",
           network_list.count);
     for (CWNetwork *network in network_list) {
-      NSLog(@"===============================");
-      NSLog(@"SSID: %@", network.ssid ?: @"(null)");
-      NSLog(@"BSSID: %@", network.bssid);
-      NSLog(@"RSSI: %ld", network.rssiValue);
-      NSLog(@"Noise: %ld", network.noiseMeasurement);
-      NSLog(@"Channel: %@", network.wlanChannel);
+      // NSLog(@"===============================");
+      // NSLog(@"SSID: %@", network.ssid ?: @"(null)");
+      // NSLog(@"BSSID: %@", network.bssid);
+      // NSLog(@"RSSI: %ld", network.rssiValue);
+      // NSLog(@"Noise: %ld", network.noiseMeasurement);
+      // NSLog(@"Channel: %@", network.wlanChannel);
       if (network.ssid) {
         NetworkItem element = NetworkItem();
         element.ssid = (char *)[[network ssid] UTF8String];
@@ -148,16 +148,17 @@ Value getWifiStatus(const CallbackInfo &info) {
   Array res = Array::New(env);
   int count = 0;
   for (CWInterface *interface in interfaces) {
+    bool isConnected = false;
     Napi::Object obj = Napi::Object::New(env);
     const char *ssid = [[interface ssid] UTF8String];
     const char *bssid = [[interface bssid] UTF8String];
     bool isOn = [interface powerOn];
     const char *name = [[interface interfaceName] UTF8String];
+    obj.Set(Napi::String::New(env, "ip"), Napi::String::New(env, ""));
     struct ifaddrs *ifa, *ifaddr;
     char host[NI_MAXHOST];
     if (getifaddrs(&ifaddr) == -1) {
       NSLog(@"Error getting ip address");
-      obj.Set(Napi::String::New(env, "ip"), Napi::String::New(env, ""));
     }
 
     for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
@@ -175,6 +176,7 @@ Value getWifiStatus(const CallbackInfo &info) {
           }
           if (family == AF_INET) {
             obj.Set(Napi::String::New(env, "ip"), Napi::String::New(env, host));
+            isConnected = true;
           }
         }
       }
@@ -184,6 +186,7 @@ Value getWifiStatus(const CallbackInfo &info) {
     obj.Set(Napi::String::New(env, "bssid"), Napi::String::New(env, bssid ?: ""));
     obj.Set(Napi::String::New(env, "isOn"), Napi::Boolean::New(env, isOn));
     obj.Set(Napi::String::New(env, "name"), Napi::String::New(env, name));
+    obj.Set(Napi::String::New(env, "connection"), Napi::String::New(env, isConnected ? "connected" : "disconnected"));
     res.Set(count, obj);
     count ++;
   }
