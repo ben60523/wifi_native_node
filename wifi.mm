@@ -193,7 +193,7 @@ Value getWifiStatus(const CallbackInfo &info) {
     obj.Set(Napi::String::New(env, "ssid"), Napi::String::New(env, ssid ?: ""));
     obj.Set(Napi::String::New(env, "bssid"), Napi::String::New(env, bssid ?: ""));
     obj.Set(Napi::String::New(env, "isOn"), Napi::Boolean::New(env, isOn));
-    obj.Set(Napi::String::New(env, "name"), Napi::String::New(env, name));
+    obj.Set(Napi::String::New(env, "adapterName"), Napi::String::New(env, name));
     obj.Set(Napi::String::New(env, "connection"), Napi::String::New(env, isConnected ? "connected" : "disconnected"));
     res.Set(count, obj);
     count ++;
