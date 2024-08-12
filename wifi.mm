@@ -1,5 +1,6 @@
 #include <CoreWLAN/CoreWLAN.h>
 #import <CoreLocation/CoreLocation.h>
+#include <cstdlib>
 #include <functional>
 #include <objc/NSObject.h>
 #include <Foundation/Foundation.h>
@@ -78,11 +79,18 @@ private:
 
 class WifiConnectWorker : public AsyncWorker {
 public:
-  WifiConnectWorker(const char *ssid, const char *password, Function callback)
-      : AsyncWorker(callback), ssid(ssid), password(password) {}
+  WifiConnectWorker(const char *_ssid, const char *_password, Function callback)
+      : AsyncWorker(callback) {
+        ssid = (char *)malloc(sizeof(_ssid));
+        password = (char *)malloc(sizeof(_password));
+        strcpy(ssid, _ssid);
+        strcpy(password, _password);
+      }
   ~WifiConnectWorker() {}
   void Execute() override { connect_network(); }
   void OnOK() override {
+    free(ssid);
+    free(password);
     HandleScope scope(Env());
     Napi::Boolean ret = Napi::Boolean::New(Env(), res);
     Callback().Call(Env().Global(), {ret});
@@ -90,8 +98,8 @@ public:
 
 private:
   bool res;
-  const char *ssid;
-  const char *password;
+  char *ssid;
+  char *password;
   void connect_network() {
     CWInterface *wifiInterface = [[CWWiFiClient sharedWiFiClient] interface];
     if (!wifiInterface) {
@@ -118,7 +126,7 @@ private:
       }
     }
     if (!apFound) {
-      NSLog(@"%s is not found", ssid);
+      NSLog(@"%@ is not found", ns_ssid);
     }
   }
 };
@@ -133,7 +141,7 @@ Value scan(const CallbackInfo &info) {
 Value connectAp(const CallbackInfo &info) {
   std::string ssid_str = info[0].As<Napi::String>();
   std::string pass_str = info[1].As<Napi::String>();
-  const char *ssid = ssid_str.c_str();;
+  const char *ssid = ssid_str.c_str();
   const char *pass = pass_str.c_str();
   Function cb = info[2].As<Function>();
   WifiConnectWorker *worker = new WifiConnectWorker(ssid, pass, cb);
