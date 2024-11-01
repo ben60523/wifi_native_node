@@ -12,7 +12,7 @@
     "node-gyp": "^10.2.0"
   },
   "scripts": {
-    "build": "node-gyp rebuild",
+    "build": "npx node-gyp rebuild",
     "test_scan": "node example/wifi_scan.js",
     "test_connect": "node example/wifi_connect.js",
     "test_disconnect": "node example/wifi_disconnect.js",

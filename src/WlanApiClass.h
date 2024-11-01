@@ -51,7 +51,7 @@ public:
     HRESULT scan(BOOL isSync);
     vector<SCAN_RESULT> get_network_list(void);
     vector<INTERFACE_INFO> get_interface_info(void);
-    HRESULT WlanApiClass::connect(GUID guid_for_wlan, WCHAR *WProfile, WCHAR *profileName, char *ssid, ULONG ssidLen);
+    HRESULT connect(GUID guid_for_wlan, WCHAR *WProfile, WCHAR *profileName, char *ssid, ULONG ssidLen);
     HRESULT disconnect(GUID guid_for_wlan);
     /**
      * scanSync: It will stop and wait wlan_callback_info comes
