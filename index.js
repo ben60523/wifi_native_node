@@ -64,9 +64,9 @@ var getIfaceState = function () {
       error = error1;
       continue;
     }
-    if (VALUE.startsWith("Wi-Fi")) {
-      adapterName = VALUE;
-    }
+    // if (VALUE.startsWith("Wi-Fi")) {
+    //   adapterName = VALUE;
+    // }
     switch (KEY) {
       case "GUID":
         ifaceList.forEach((iface) => {
@@ -74,6 +74,9 @@ var getIfaceState = function () {
             iface.adapterName = adapterName;
           }
         });
+        break;
+      case "Name": 
+	adapterName = VALUE;
         break;
       default:
         break;
