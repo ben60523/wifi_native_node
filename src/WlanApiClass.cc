@@ -265,11 +265,13 @@ vector<SCAN_RESULT> WlanApiClass::get_network_list()
                 // printf("ok\n");
                 for (unsigned int c = 0; c < WlanBssList->dwNumberOfItems; c++)
                 {
-                    if (strstr((char *)WlanBssList->wlanBssEntries[c].dot11Ssid.ucSSID, "MediCam_"))
+                    const DOT11_SSID &dot11Ssid = WlanBssList->wlanBssEntries[c].dot11Ssid;
+                    const std::string ssid((char *)dot11Ssid.ucSSID, dot11Ssid.uSSIDLength);
+                    if (ssid.compare(0, 8, "Fasmedo_") == 0 || ssid.compare(0, 8, "MediCam_") == 0)
                     {
                         SCAN_RESULT scan_result;
                         // wprintf(L"ssid: %hs, rssi: %d\n", WlanBssList->wlanBssEntries[c].dot11Ssid.ucSSID, WlanBssList->wlanBssEntries[c].lRssi);
-                        scan_result.ssid = std::string((char *)WlanBssList->wlanBssEntries[c].dot11Ssid.ucSSID, WlanBssList->wlanBssEntries[c].dot11Ssid.uSSIDLength);
+                        scan_result.ssid = ssid;
                         scan_result.rssi = WlanBssList->wlanBssEntries[c].lRssi;
                         scan_result_list.push_back(scan_result);
                     }
