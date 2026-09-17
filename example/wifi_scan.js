@@ -8,7 +8,6 @@ if (os.platform() === "win32") {
     wifiNative
       .scanAsync()
       .then((list) => {
-        // console.log(list);
         wifiNative.free();
       })
       .catch((e) => {

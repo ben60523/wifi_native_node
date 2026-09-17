@@ -76,7 +76,10 @@ var getIfaceState = function () {
         });
         break;
       case "Name": 
-	adapterName = VALUE;
+        adapterName = VALUE;
+        break;
+      case "Nome":
+        adapterName = VALUE;
         break;
       default:
         break;

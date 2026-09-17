@@ -1,6 +1,6 @@
 {
   "name": "wifi_native",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "wifi scan with wlanapi",
   "main": "index.js",
   "private": true,
